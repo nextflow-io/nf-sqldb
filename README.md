@@ -1,8 +1,8 @@
 # SQL DB plugin for Nextflow
 
-This plugin provider an extension to implement built-in support for SQL DB access and manipulation in Nextflow scripts. 
+This plugin provides an extension to implement built-in support for SQL DB access and manipulation in Nextflow scripts. 
 
-It provides the ability to create Nextflow channel from SQL queries and to populate database tables. The current version 
+It provides the ability to create a Nextflow channel from SQL queries and to populate database tables. The current version 
 provides out-of-the-box support for the following databases: 
 
 * [H2](https://www.h2database.com)
@@ -24,7 +24,7 @@ plugins {
 }
 ```
                                                               
-The above declaration allow the use of the SQL plugin functionalities in your Nextflow pipelines. See the section 
+The above declaration allows the use of the SQL plugin functionalities in your Nextflow pipelines. See the section 
 below to configure the connection properties with a database instance. 
 
 ## Configuration
@@ -59,11 +59,11 @@ using `demo` schema, with `my-name` and `my-password` as credentials.
 
 ## Available operations
 
-This plugin adds to the Nextflow DSL the following extensions that allows performing query and populate database tables.
+This plugin adds to the Nextflow DSL the following extensions that allows performing of queries and populating database tables.
 
 ### fromQuery
 
-The `fromQuery` factory method allows performing a query against a SQL database and creating a Nextflow channel emitting
+The `fromQuery` factory method allows for performing a query against a SQL database and creating a Nextflow channel emitting
 a tuple for each row in the corresponding result set. For example:
 
 ```
@@ -130,6 +130,6 @@ To query this file in a Nextflow script use the following snippet:
 ```
 
 
-The `CSVREAD` function provided by the H2 database engine allows the access of a CSV file in your computer file system,
+The `CSVREAD` function provided by the H2 database engine allows access of a CSV file in your computer file system,
 you can replace `test.csv` with a CSV file path of your choice. The `foo>=2` condition shows how to define a filtering
 clause using the conventional SQL WHERE constrains. 
