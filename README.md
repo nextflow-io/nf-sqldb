@@ -70,7 +70,7 @@ a tuple for each row in the corresponding result set. For example:
 ch = channel.sql.fromQuery('select alpha, delta, omega from SAMPLE', db: 'foo')
 ```
 
-### insertInto
+### sqlInsert
 
 The `insertInto` operator provided by this plugin allows populating a database table with the data emitted
 by a Nextflow channels and therefore produced as result by a pipeline process or an upstream operator. For example:
