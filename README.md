@@ -18,11 +18,11 @@ This repository only holds plugin artefacts. Source code is available at this [l
 
 ## Get started 
   
-Make sure to have Nextflow 21.08.0 or later. Add the following snippet to your `nextflow.config` file. 
+Make sure to have Nextflow `21.08.0-edge` or later. Add the following snippet to your `nextflow.config` file. 
 
 ```
 plugins {
-  id 'nf-sqldb@0.2.0'
+  id 'nf-sqldb@0.4.0'
 }
 ```
                                                               
