@@ -1,0 +1,58 @@
+NEXTFLOW SQLDB PLUGIN
+
+Copyright 2020-2022, Seqera Labs
+
+
+This software includes source code and libraries developed by:
+
+    Apache Groovy
+    Copyright 2003-2018 Apache Software Foundation
+    Licensed under Apache License, Version 2.0
+
+    Nextflow
+    Copyright 2020-2022, Seqera Labs
+    Licensed under the Apache License, Version 2.0
+    
+    Logback
+    Copyright 1999-2017, QOS.ch
+    Licensed under the EPL v1.0 license
+
+    SLF4J
+    Copyright 2004-2018 QOS.ch
+    Licensed under the MIT license
+
+    MariaDB JDBC driver
+    Copyright 2015-2021 MariaDB Corporation Ab
+    Licensed under LGPL version 2.1
+    https://search.maven.org/artifact/org.mariadb.jdbc/mariadb-java-client/2.7.0/jar
+
+    MySql JDBC driver
+    Copyright (c) 2022, Oracle and/or its affiliates
+    Licensed under GPL v2 with FOSS exception
+    https://search.maven.org/artifact/mysql/mysql-connector-java/8.0.22/jar
+    
+    H2 database engine
+    Copyright 2004-2022 H2 Group
+    Licensed under Mozilla Public License, version 2.0
+    https://search.maven.org/artifact/com.h2database/h2/1.4.200/jar
+    
+    PostgreSQL JDBC driver
+    Copyright 2020, PostgreSQL Global Development Group
+    Licensed under BSD 2 Clause
+    https://search.maven.org/artifact/org.postgresql/postgresql/42.4.0/jar
+
+    SQLite JDBC driver
+    Copyright 2007 David Crawshaw
+    Licensed under the Apache License, Version 2.0
+    https://github.com/xerial/sqlite-jdbc
+    https://search.maven.org/artifact/org.xerial/sqlite-jdbc/3.36.0.3/jar
+
+    DuckDB JDBC driver
+    Licensed under the MIT license
+    https://search.maven.org/artifact/org.duckdb/duckdb_jdbc/0.3.0/jar
+
+    Magnitude Simba Athena JDBC driver
+    https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html#atelong-jdbc-driver-license-agreement
+    https://s3.amazonaws.com/athena-downloads/drivers/JDBC/SimbaAthenaJDBC-2.0.27.1000/doc/LICENSE.txt
+    Licensed under Apache License, Version 2.0
+

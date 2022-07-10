@@ -90,6 +90,8 @@ The `sqlInsert` operator provided by this plugin allows populating a database ta
 by a Nextflow channels and therefore produced as result by a pipeline process or an upstream operator. For example:
 
 ```
+include { sqlInsert } from 'plugin/nf-sqldb'
+
 channel
     .of('Hello','world!')
     .map( it -> tuple(it, it.length) )
