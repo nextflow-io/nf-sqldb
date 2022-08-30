@@ -19,28 +19,54 @@ package nextflow.sql
 
 import groovy.sql.Sql
 import nextflow.Channel
-import nextflow.extension.ChannelExtensionProvider
+import nextflow.plugin.Plugins
+import nextflow.plugin.TestPluginDescriptorFinder
+import nextflow.plugin.TestPluginManager
+import nextflow.plugin.extension.PluginExtensionProvider
+import org.pf4j.PluginDescriptorFinder
+import spock.lang.Shared
 import spock.lang.Timeout
-import test.BaseSpec
+import test.Dsl2Spec
 import test.MockScriptRunner
+
+import java.nio.file.Path
 
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Timeout(10)
-class SqlDslTest extends BaseSpec {
+class SqlDslTest extends Dsl2Spec {
 
-    def setup () {
-        new ChannelExtensionProvider()
-                .install()
-                .loadPluginExtensionMethods(new ChannelSqlExtension(), ['fromQuery':'fromQuery', sqlInsert:'sqlInsert'])
+    @Shared String pluginsMode
+
+    def setup() {
+        // reset previous instances
+        PluginExtensionProvider.reset()
+        // this need to be set *before* the plugin manager class is created
+        pluginsMode = System.getProperty('pf4j.mode')
+        System.setProperty('pf4j.mode', 'dev')
+        // the plugin root should
+        def root = Path.of('.').toAbsolutePath().normalize()
+        def manager = new TestPluginManager(root){
+            @Override
+            protected PluginDescriptorFinder createPluginDescriptorFinder() {
+                return new TestPluginDescriptorFinder(){
+                    @Override
+                    protected Path getManifestPath(Path pluginPath) {
+                        return pluginPath.resolve('build/resources/main/META-INF/MANIFEST.MF')
+                    }
+                }
+            }
+        }
+        Plugins.init(root, 'dev', manager)
     }
 
     def cleanup() {
-        ChannelExtensionProvider.reset()
+        Plugins.stop()
+        PluginExtensionProvider.reset()
+        pluginsMode ? System.setProperty('pf4j.mode',pluginsMode) : System.clearProperty('pf4j.mode')
     }
-
     def 'should perform a query and create a channel' () {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
@@ -55,6 +81,7 @@ class SqlDslTest extends BaseSpec {
 
         when:
         def SCRIPT = '''
+            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             def table = 'FOO'
             def sql = "select * from $table"
             channel.fromQuery(sql, db: "test") 
@@ -80,6 +107,7 @@ class SqlDslTest extends BaseSpec {
 
         when:
         def SCRIPT = '''
+            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             channel
               .of(100,200,300)
               .sqlInsert(into:"FOO", columns:'id', db:"ds1")
@@ -110,6 +138,7 @@ class SqlDslTest extends BaseSpec {
 
         when:
         def SCRIPT = '''
+            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             channel
               .of(100,200,300,400,500)
               .sqlInsert(into:'FOO', columns:'id', db:'ds1', batchSize: 2)
@@ -145,6 +174,7 @@ class SqlDslTest extends BaseSpec {
 
         when:
         def SCRIPT = '''
+            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             def table = 'FOO'
             def sql = "select * from $table"
             channel.fromQuery(sql, db: "test", emitColumns:true) 
