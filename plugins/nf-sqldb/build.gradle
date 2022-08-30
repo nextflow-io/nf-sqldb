@@ -54,9 +54,12 @@ sourceSets {
     test.resources.srcDirs = []
 }
 
+ext{
+    nextflowVersion = '22.08.1-edge'
+}
 
 dependencies {
-    compileOnly 'io.nextflow:nextflow:22.04.0'
+    compileOnly "io.nextflow:nextflow:$nextflowVersion"
     compileOnly 'org.slf4j:slf4j-api:1.7.10'
     compileOnly 'org.pf4j:pf4j:3.4.1'
     
@@ -69,7 +72,7 @@ dependencies {
     api 'org.duckdb:duckdb_jdbc:0.3.0'
     api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
 
-    testImplementation 'io.nextflow:nextflow:22.06.0-edge'
+    testImplementation "io.nextflow:nextflow:$nextflowVersion"
     testImplementation "org.codehaus.groovy:groovy:3.0.10"
     testImplementation "org.codehaus.groovy:groovy-nio:3.0.10"
     testImplementation ("org.codehaus.groovy:groovy-test:3.0.10") { exclude group: 'org.codehaus.groovy' }
@@ -78,6 +81,9 @@ dependencies {
     testImplementation ("org.spockframework:spock-core:2.1-groovy-3.0") { exclude group: 'org.codehaus.groovy'; exclude group: 'net.bytebuddy' }
     testImplementation ('org.spockframework:spock-junit4:2.1-groovy-3.0') { exclude group: 'org.codehaus.groovy'; exclude group: 'net.bytebuddy' }
     testImplementation ('com.google.jimfs:jimfs:1.1')
+
+    testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
+    testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
 }
 
 test {

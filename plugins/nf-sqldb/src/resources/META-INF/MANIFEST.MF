@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Plugin-Class: nextflow.sql.SqlPlugin
 Plugin-Id: nf-sqldb
 Plugin-Provider: Seqera Labs
-Plugin-Version: 0.4.1
-Plugin-Requires: >=21.08.0-edge
+Plugin-Version: 0.5.0
+Plugin-Requires: >=22.08.1-edge

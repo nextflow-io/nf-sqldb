@@ -1,5 +1,8 @@
 NF-SQLDB CHANGE-LOG
 ===================
+0.5.0 - 30 Aug 2022
+- Bump nextflow required version to 22.08.1-edge
+
 0.4.1 - 25 May 2022
 - Fix AWS Athena driver dependency
 

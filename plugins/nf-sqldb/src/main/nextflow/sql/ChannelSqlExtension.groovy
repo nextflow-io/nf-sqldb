@@ -27,9 +27,10 @@ import nextflow.Channel
 import nextflow.NF
 import nextflow.Session
 import nextflow.extension.CH
-import nextflow.extension.ChannelExtensionPoint
 import nextflow.extension.DataflowHelper
-import nextflow.plugin.Scoped
+import nextflow.plugin.extension.Factory
+import nextflow.plugin.extension.Operator
+import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
@@ -40,8 +41,7 @@ import nextflow.util.CheckHelper
  */
 @Slf4j
 @CompileStatic
-@Scoped('sql')
-class ChannelSqlExtension extends ChannelExtensionPoint {
+class ChannelSqlExtension extends PluginExtensionPoint {
 
     private static final Map QUERY_PARAMS = [
             db: CharSequence,
@@ -68,10 +68,12 @@ class ChannelSqlExtension extends ChannelExtensionPoint {
         this.config = new SqlConfig((Map) session.config.navigate('sql.db'))
     }
 
+    @Factory
     DataflowWriteChannel fromQuery(String query) {
         fromQuery(Collections.emptyMap(), query)
     }
 
+    @Factory
     DataflowWriteChannel fromQuery(Map opts, String query) {
         CheckHelper.checkParams('fromQuery', opts, QUERY_PARAMS)
         return queryToChannel(query, opts)
@@ -109,6 +111,7 @@ class ChannelSqlExtension extends ChannelExtensionPoint {
         return dataSource
     }
 
+    @Operator
     DataflowWriteChannel sqlInsert( DataflowReadChannel source, Map opts=null ) {
         CheckHelper.checkParams('sqlInsert', opts, INSERT_PARAMS)
         final dataSource = dataSourceFromOpts(opts)
