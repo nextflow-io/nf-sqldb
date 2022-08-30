@@ -27,9 +27,8 @@ import nextflow.Channel
 import nextflow.NF
 import nextflow.Session
 import nextflow.extension.CH
-import nextflow.extension.ChannelExtensionPoint
 import nextflow.extension.DataflowHelper
-import nextflow.plugin.Scoped
+import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
@@ -40,8 +39,7 @@ import nextflow.util.CheckHelper
  */
 @Slf4j
 @CompileStatic
-@Scoped('sql')
-class ChannelSqlExtension extends ChannelExtensionPoint {
+class ChannelSqlExtension extends PluginExtensionPoint {
 
     private static final Map QUERY_PARAMS = [
             db: CharSequence,
