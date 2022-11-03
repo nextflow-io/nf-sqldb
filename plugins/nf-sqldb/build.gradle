@@ -84,6 +84,10 @@ dependencies {
 
     testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
     testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
+
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:mysql:1.17.4")
+    testImplementation("org.testcontainers:postgresql:1.17.4")
 }
 
 test {
