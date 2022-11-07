@@ -10,6 +10,8 @@
 
 In the example below, it is assumed that the [NCBI SRA Metadata](https://www.ncbi.nlm.nih.gov/sra/docs/sra-athena/) has been used as the data source. You can refer the [tutorial from NCBI](https://www.youtube.com/watch?v=_F4FhcDWSJg&ab_channel=TheNationalLibraryofMedicine) for setting up the AWS resources correctly
 
+### Configuration
+
 ```nextflow config
 //NOTE: Replace the values in the config file as per your setup
 
@@ -36,6 +38,8 @@ sql {
 
 ```
 
+### Pipeline
+
 Once the configuration has been setup correctly, you can use it in the Nextlow code as shown below
 
 ```nextflow
@@ -52,6 +56,8 @@ Channel.fromQuery(sqlQuery, db: 'athena')
 .view()
 
 ```
+
+### Output
 
 When you execute the above code, you'll see the AWS Athena query results on the console
 
