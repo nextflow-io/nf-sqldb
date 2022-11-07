@@ -66,6 +66,7 @@ class SqlDataSource {
             case 'postgresql': return 'org.postgresql.Driver'
             case 'duckdb': return 'org.duckdb.DuckDBDriver'
             case 'awsathena': return 'com.simba.athena.jdbc.Driver'
+            case 'googlebigquery': return 'com.simba.googlebigquery.jdbc.Driver'
         }
         return null
     }

@@ -62,7 +62,7 @@ dependencies {
     compileOnly "io.nextflow:nextflow:$nextflowVersion"
     compileOnly 'org.slf4j:slf4j-api:1.7.10'
     compileOnly 'org.pf4j:pf4j:3.4.1'
-    
+
     api("org.codehaus.groovy:groovy-sql:3.0.10") { transitive = false }
     api 'com.h2database:h2:1.4.200'
     api 'mysql:mysql-connector-java:8.0.22'
@@ -71,6 +71,7 @@ dependencies {
     api 'org.xerial:sqlite-jdbc:3.36.0.3'
     api 'org.duckdb:duckdb_jdbc:0.3.0'
     api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
+    api files('src/dist/lib/GoogleBigQueryJDBC42.jar')
 
     testImplementation "io.nextflow:nextflow:$nextflowVersion"
     testImplementation "org.codehaus.groovy:groovy:3.0.10"
