@@ -1,25 +1,25 @@
 # SQL DB plugin for Nextflow
 
-This plugin provides an extension to implement built-in support for SQL DB access and manipulation in Nextflow scripts. 
+This plugin provides an extension to implement built-in support for SQL DB access and manipulation in Nextflow scripts.
 
-It provides the ability to create a Nextflow channel from SQL queries and to populate database tables. 
-The current version provides out-of-the-box support for the following databases: 
+It provides the ability to create a Nextflow channel from SQL queries and to populate database tables.
+The current version provides out-of-the-box support for the following databases:
 
 * [H2](https://www.h2database.com)
-* [MySQL](https://www.mysql.com/) 
+* [MySQL](https://www.mysql.com/)
 * [MariaDB](https://mariadb.org/)
 * [PostgreSQL](https://www.postgresql.org/)
 * [SQLite](https://www.sqlite.org/index.html)
 * [DuckDB](https://duckdb.org/)
-* [AWS Athena](https://aws.amazon.com/athena/)
-                    
+* [AWS Athena](https://aws.amazon.com/athena/) (Setup guide [here](/docs/aws-athena.md))
+
 NOTE: THIS IS A PREVIEW TECHNOLOGY, FEATURES AND CONFIGURATION SETTINGS CAN CHANGE IN FUTURE RELEASES.
 
 This repository only holds plugin artefacts. Source code is available at this [link](https://github.com/nextflow-io/nextflow/tree/master/plugins/nf-sqldb).
 
-## Get started 
+## Get started
   
-Make sure to have Nextflow `22.08.1-edge` or later. Add the following snippet to your `nextflow.config` file. 
+Make sure to have Nextflow `22.08.1-edge` or later. Add the following snippet to your `nextflow.config` file.
 
 ```
 plugins {
@@ -27,18 +27,17 @@ plugins {
 }
 ```
 
-The above declaration allows the use of the SQL plugin functionalities in your Nextflow pipelines. 
-See the section below to configure the connection properties with a database instance. 
-
+The above declaration allows the use of the SQL plugin functionalities in your Nextflow pipelines.
+See the section below to configure the connection properties with a database instance.
 
 ## Configuration
 
 The target database connection coordinates are specified in the `nextflow.config` file using the
 `sql.db` scope. The following are available
 
-| Config option 	                    | Description 	                |
-|---	                                |---	                        |
-| `sql.db.'<DB-NAME>'.url`      | The database connection URL based on Java [JDBC standard](https://docs.oracle.com/javase/tutorial/jdbc/basics/connecting.html#db_connection_url). 
+| Config option                      | Description                  |
+|---                                 |---                         |
+| `sql.db.'<DB-NAME>'.url`      | The database connection URL based on Java [JDBC standard](https://docs.oracle.com/javase/tutorial/jdbc/basics/connecting.html#db_connection_url).
 | `sql.db.'<DB-NAME>'.driver`   | The database driver class name (optional).
 | `sql.db.'<DB-NAME>'.user`     | The database connection user name.
 | `sql.db.'<DB-NAME>'.password` | The database connection password.
@@ -78,10 +77,10 @@ ch = channel.fromQuery('select alpha, delta, omega from SAMPLE', db: 'foo')
 
 The following options are available:
 
-| Operator option 	| Description 	                |
-|---	            |---	                        |
+| Operator option  | Description                  |
+|---             |---                         |
 | `db`              | The database handle. It must must a `sql.db` name defined in the `nextflow.config` file.
-| `batchSize`       | Performs the query in batches of the specified size. This is useful to avoid loading the complete resultset in memory for query returning a large number of entries. NOTE: this feature requires that the underlying SQL database to support `LIMIT` and `OFFSET` capability. 
+| `batchSize`       | Performs the query in batches of the specified size. This is useful to avoid loading the complete resultset in memory for query returning a large number of entries. NOTE: this feature requires that the underlying SQL database to support `LIMIT` and `OFFSET` capability.
 | `emitColumns`     | When `true` the column names in the select statement are emitted as first tuple in the resulting channel.
 
 ### sqlInsert
@@ -111,8 +110,8 @@ NOTE: the target table (e.g. `SAMPLE` in the above example) must be created ahea
 
 The following options are available:
 
-| Operator option 	 | Description 	                |
-|-------------------|---	                        |
+| Operator option   | Description                  |
+|-------------------|---                         |
 | `db`              | The database handle. It must must a `sql.db` name defined in the `nextflow.config` file.
 | `into`            | The database table name into with the data needs to be stored.
 | `columns`         | The database table column names to be filled with the channel data. The column names order and cardinality must match the tuple values emitted by the channel. The columns can be specified as a `List` object or a comma-separated value string.
@@ -146,17 +145,16 @@ To query this file in a Nextflow script use the following snippet:
           .view()
 ```
 
-
 The `CSVREAD` function provided by the H2 database engine allows the access of a CSV file in your computer file system,
 you can replace `test.csv` with a CSV file path of your choice. The `foo>=2` condition shows how to define a filtering
-clause using the conventional SQL WHERE constrains. 
+clause using the conventional SQL WHERE constrains.
 
-## Important 
+## Important
 
-This plugin is not expected to be used to store and access a pipeline status in a synchronous manner during the pipeline 
-execution. 
+This plugin is not expected to be used to store and access a pipeline status in a synchronous manner during the pipeline
+execution.
 
-This means that if your script has a `sqlInsert` operation followed by a successive `fromQuery` operation, the query 
+This means that if your script has a `sqlInsert` operation followed by a successive `fromQuery` operation, the query
 may *not* contain previously inserted data due to the asynchronous nature of Nextflow operators.
 
 The SQL support provided by this plugin is meant to be used to fetch DB data from a previous run or to populate DB tables
