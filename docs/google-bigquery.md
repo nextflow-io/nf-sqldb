@@ -2,15 +2,59 @@
 
 ## Pre-requisites
 
-FIXME
+1. A Google Cloud project with BigQuery APIs enabled
+2. A service account with sufficient permissions
 
 ## Usage
 
-In the example below, it is assumed that the [NCBI SRA Metadata](https://www.ncbi.nlm.nih.gov/sra/docs/sra-athena/) has
+In the example below, it is assumed that the [NCBI SRA Metadata](https://www.ncbi.nlm.nih.gov/sra/docs/sra-bigquery/) has been used as the data source. You can refer the official [NCBI docs](https://www.ncbi.nlm.nih.gov/sra/docs/sra-bigquery/) for setting up the `nih-sra-datastore` within your BigQuery console.
+
+*NOTE*: For Google BiqQuery you do not need to specify the `user` and `password` fields as these are provided by your service account credentials JSON file.
+
+### Configuration
+
+```nextflow config
+//NOTE: Replace the values in the config file as per your setup
+
+params {
+    google_bigquery_db = "nih-sra-datastore.sra.metadata"
+    google_project_id = "<YOUR_GOOGLE_PROJECT_ID>"
+    google_service_account_email = "<YOUR_GOOGLE_SERVICE_ACCOUNT_EMAIL>"
+    google_service_account_key = "<YOUR_GOOGLE_SERVICE_ACCOUNT_KEY_LOCATION>"
+}
+
+plugins { 
+   id 'nf-sqldb@0.6.0' 
+} 
+
+sql {
+    db {
+        googlebigquery {
+            url = "jdbc:bigquery://https://www.googleapis.com/bigquery/v2:443;ProjectId=${params.google_project_id};OAuthType=0;OAuthServiceAcctEmail=${params.google_service_account_email};OAuthPvtKeyPath=${params.google_service_account_key};"
+        }
+    }
+}
+```
 
 ### Pipeline
 
-Once the configuration has been setup correctly, you can use it in the Nextlow code as shown below
+Once the configuration has been setup correctly, you can use it in the Nextflow code as shown below
+
+```nextflow
+include { fromQuery } from 'plugin/nf-sqldb'
+
+def googleSqlQuery = """
+                SELECT *
+                FROM `nih-sra-datastore.sra.metadata`
+                WHERE organism = 'Mycobacterium tuberculosis'
+                AND bioproject = 'PRJNA670836'
+                LIMIT 2;
+                """
+
+Channel.fromQuery(googleSqlQuery, db: 'googlebigquery')
+.view()
+
+```
 
 ### Output
 
