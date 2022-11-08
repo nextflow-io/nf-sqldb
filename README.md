@@ -12,6 +12,7 @@ The current version provides out-of-the-box support for the following databases:
 * [SQLite](https://www.sqlite.org/index.html)
 * [DuckDB](https://duckdb.org/)
 * [AWS Athena](https://aws.amazon.com/athena/) (Setup guide [here](/docs/aws-athena.md))
+* [Google BigQuery](https://cloud.google.com/bigquery) (Setup guide [here](/docs/google-bigquery.md))
 
 NOTE: THIS IS A PREVIEW TECHNOLOGY, FEATURES AND CONFIGURATION SETTINGS CAN CHANGE IN FUTURE RELEASES.
 

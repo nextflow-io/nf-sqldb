@@ -70,18 +70,34 @@ dependencies {
     api 'org.postgresql:postgresql:42.2.23'
     api 'org.xerial:sqlite-jdbc:3.36.0.3'
     api 'org.duckdb:duckdb_jdbc:0.3.0'
+
+
+    // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
+    // Reference https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
     api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
+
+    // JDBC driver setup for Google BigQuery - the 3rd party JAR are being downloaded and setup as gradle tasks below.
+    // Reference https://cloud.google.com/bigquery/docs/reference/odbc-jdbc-drivers
     api files('src/dist/lib/GoogleBigQueryJDBC42.jar')
+    //NOTE: Had to remove the slf4j jar due to a conflict
+    implementation fileTree(dir: 'src/dist/lib', include: '*.jar')
+
 
     testImplementation "io.nextflow:nextflow:$nextflowVersion"
     testImplementation "org.codehaus.groovy:groovy:3.0.10"
     testImplementation "org.codehaus.groovy:groovy-nio:3.0.10"
-    testImplementation ("org.codehaus.groovy:groovy-test:3.0.10") { exclude group: 'org.codehaus.groovy' }
-    testImplementation ("cglib:cglib-nodep:3.3.0")
-    testImplementation ("org.objenesis:objenesis:3.2")
-    testImplementation ("org.spockframework:spock-core:2.1-groovy-3.0") { exclude group: 'org.codehaus.groovy'; exclude group: 'net.bytebuddy' }
-    testImplementation ('org.spockframework:spock-junit4:2.1-groovy-3.0') { exclude group: 'org.codehaus.groovy'; exclude group: 'net.bytebuddy' }
-    testImplementation ('com.google.jimfs:jimfs:1.1')
+    testImplementation("org.codehaus.groovy:groovy-test:3.0.10") { exclude group: 'org.codehaus.groovy' }
+    testImplementation("cglib:cglib-nodep:3.3.0")
+    testImplementation("org.objenesis:objenesis:3.2")
+    testImplementation("org.spockframework:spock-core:2.1-groovy-3.0") {
+        exclude group: 'org.codehaus.groovy';
+        exclude group: 'net.bytebuddy'
+    }
+    testImplementation('org.spockframework:spock-junit4:2.1-groovy-3.0') {
+        exclude group: 'org.codehaus.groovy';
+        exclude group: 'net.bytebuddy'
+    }
+    testImplementation('com.google.jimfs:jimfs:1.1')
 
     testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
     testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
@@ -92,6 +108,7 @@ test {
 }
 
 /**
+ * AWS Athena
  * The following tasks download and confirm the MD5 checksum of the ZIP archive
  * for Simba Athena JDBC driver and extract its contents to the build directory
  */
@@ -109,14 +126,52 @@ task verifyAthenDep(type: Verify, dependsOn: downloadAthenDep) {
 
 task unzipAthenDep(dependsOn: verifyAthenDep, type: Copy) {
     from zipTree(new File(buildDir, 'downloads/SimbaAthenaJDBC-2.0.25.1001.zip'))
-    into "${buildDir}/downloads/unzip"
+    into "${buildDir}/downloads/unzip/awsathena/"
 }
 
 // Files under src/dist are included into the distribution zip
 // https://docs.gradle.org/current/userguide/application_plugin.html
 task copyAthenDep(dependsOn: unzipAthenDep, type: Copy) {
-    from file(new File(buildDir, '/downloads/unzip/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
+    from file(new File(buildDir, '/downloads/unzip/awsathena/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
     into "src/dist/lib"
 }
 project.copyPluginLibs.dependsOn('copyAthenDep')
 project.compileGroovy.dependsOn('copyAthenDep')
+
+/**
+ * Google BigQuery
+ * The following tasks download and confirm the MD5 checksum of the ZIP archive
+ * for Simba BigQuery JDBC driver and extract its contents to the build directory
+ * Reference: https://cloud.google.com/bigquery/docs/reference/odbc-jdbc-drivers
+ */
+task downloadBigqueryDep(type: Download) {
+    src 'https://storage.googleapis.com/simba-bq-release/jdbc/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip'
+    dest new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip')
+    overwrite false
+}
+
+task verifyBigqueryDep(type: Verify, dependsOn: downloadBigqueryDep) {
+    src new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip')
+    algorithm 'MD5'
+    checksum '2e54169cfba2050f0a0f01bcf12c8aa7'
+}
+
+task unzipBigqueryDep(dependsOn: verifyBigqueryDep, type: Copy) {
+    from zipTree(new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip'))
+    into "${buildDir}/downloads/unzip/googlebigquery"
+}
+
+// Files under src/dist are included into the distribution zip
+// https://docs.gradle.org/current/userguide/application_plugin.html
+task copyBigqueryDep(dependsOn: unzipBigqueryDep, type: Copy) {
+    from file(new File(buildDir, '/downloads/unzip/googlebigquery/GoogleBigQueryJDBC42.jar'))
+    into "src/dist/lib"
+}
+
+task copyBigqueryLibs(dependsOn: copyBigqueryDep, type: Copy) {
+    from file(new File(buildDir, '/downloads/googlebigquery/unzip/libs'))
+    into "src/dist/lib/libs"
+}
+
+project.copyPluginLibs.dependsOn('copyBigqueryLibs')
+project.compileGroovy.dependsOn('copyBigqueryLibs')
