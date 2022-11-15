@@ -26,10 +26,11 @@ import org.pf4j.PluginWrapper
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-class SqlPlugin extends BasePlugin {
+class BigQuerySqlPlugin extends SqlPlugin {
 
-    SqlPlugin(PluginWrapper wrapper) {
+    BigQuerySqlPlugin(PluginWrapper wrapper) {
         super(wrapper)
-        DriverFactory.instance.initDefaultDrivers()
+        DriverFactory.instance.addDriver('bigquery','com.simba.googlebigquery.jdbc.Driver')
+        println DriverFactory.instance.drivers
     }
 }
