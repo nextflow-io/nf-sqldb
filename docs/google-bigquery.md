@@ -24,7 +24,7 @@ params {
 }
 
 plugins { 
-   id 'nf-sqldb@0.6.0' 
+   id 'nf-bigquery@0.0.1' 
 } 
 
 sql {

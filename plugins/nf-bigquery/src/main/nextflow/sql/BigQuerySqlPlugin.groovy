@@ -23,7 +23,7 @@ import org.pf4j.PluginWrapper
 /**
  * Implements BigQuerySQL plugin for Nextflow
  *
- * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ * @author : jorge <jorge.aguilera@seqera.io>
  */
 class BigQuerySqlPlugin extends SqlPlugin {
 
