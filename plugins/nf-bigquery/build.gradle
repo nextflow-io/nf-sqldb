@@ -120,6 +120,9 @@ task unzipBigqueryDep(dependsOn: verifyBigqueryDep, type: Copy) {
     from zipTree(new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip'))
     into "${buildDir}/downloads/unzip/googlebigquery"
 }
+unzipBigqueryDep.doLast{
+    file("${buildDir}/downloads/unzip/googlebigquery/libs/slf4j-api-1.7.36.jar").delete()
+}
 
 // Files under src/dist are included into the distribution zip
 // https://docs.gradle.org/current/userguide/application_plugin.html

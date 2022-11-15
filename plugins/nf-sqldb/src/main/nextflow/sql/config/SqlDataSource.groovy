@@ -55,7 +55,7 @@ class SqlDataSource {
     }
 
     protected String urlToDriver(String url) {
-        DriverFactory.instance.urlToDriver(url)
+        DriverRegistry.DEFAULT.urlToDriver(url)
     }
 
     Map toMap() {

@@ -70,7 +70,6 @@ class SqlDataSourceTest extends Specification {
         'jdbc:mariadb:other-host'       | 'org.mariadb.jdbc.Driver'
         'jdbc:duckdb:'                  | 'org.duckdb.DuckDBDriver'
         'jdbc:awsathena:'               | 'com.simba.athena.jdbc.Driver'
-        'jdbc:bigquery:'                | 'com.simba.googlebigquery.jdbc.Driver'
     }
 
     def 'should get default config' () {

@@ -18,7 +18,6 @@
 package nextflow.sql
 
 import nextflow.plugin.BasePlugin
-import nextflow.sql.config.DriverFactory
 import org.pf4j.PluginWrapper
 
 /**
@@ -30,6 +29,5 @@ class SqlPlugin extends BasePlugin {
 
     SqlPlugin(PluginWrapper wrapper) {
         super(wrapper)
-        DriverFactory.instance.initDefaultDrivers()
     }
 }

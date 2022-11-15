@@ -212,32 +212,4 @@ class SqlDslTest extends Dsl2Spec {
 
     }
 
-    @IgnoreIf({ System.getenv('NXF_SMOKE') })
-    @Timeout(60)
-    def 'should perform a query for Google BigQuery and create a channel'() {
-        given:
-        def projectId = System.getenv('NF_SQLDB_TEST_BIGQUERY_PROJECT_ID')
-        def serviceAccountEmail = System.getenv('NF_SQLDB_TEST_BIGQUERY_SA_EMAIL')
-        def serviceAccountCredsLocation = System.getenv('NF_SQLDB_TEST_BIGQUERY_SA_CREDS_LOCATION')
-
-        def config = [sql: [db: [bigquery: [url: "jdbc:bigquery://https://www.googleapis.com/bigquery/v2:443;ProjectId=${projectId};OAuthType=0;OAuthServiceAcctEmail=${serviceAccountEmail};OAuthPvtKeyPath=${serviceAccountCredsLocation};"]]]]
-
-        when:
-        def SCRIPT = """
-            include { fromQuery } from 'plugin/nf-sqldb'
-
-            def sql = \"\"\"
-                SELECT *
-                FROM `nih-sra-datastore.sra.metadata`
-                WHERE organism = 'Mycobacterium tuberculosis'
-                AND bioproject = 'PRJNA670836'
-                LIMIT 1;
-                \"\"\"
-
-            channel.fromQuery(sql, db: "bigquery").view()
-            """
-        then:
-        new MockScriptRunner(config).setScript(SCRIPT).execute()
-    }
-
 }

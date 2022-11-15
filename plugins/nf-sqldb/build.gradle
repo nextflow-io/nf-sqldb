@@ -76,9 +76,6 @@ dependencies {
     // Reference https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
     api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
 
-    // JDBC driver setup for Google BigQuery - the 3rd party JAR are being downloaded and setup as gradle tasks below.
-    // Reference https://cloud.google.com/bigquery/docs/reference/odbc-jdbc-drivers
-    api files('src/dist/lib/GoogleBigQueryJDBC42.jar')
     //NOTE: Had to remove the slf4j jar due to a conflict
     implementation fileTree(dir: 'src/dist/lib/libs', include: '*.jar')
 

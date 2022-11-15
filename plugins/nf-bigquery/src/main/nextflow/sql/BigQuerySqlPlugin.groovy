@@ -17,12 +17,11 @@
 
 package nextflow.sql
 
-import nextflow.plugin.BasePlugin
-import nextflow.sql.config.DriverFactory
+import nextflow.sql.config.DriverRegistry
 import org.pf4j.PluginWrapper
 
 /**
- * Implements SQL plugin for Nextflow
+ * Implements BigQuerySQL plugin for Nextflow
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -30,7 +29,6 @@ class BigQuerySqlPlugin extends SqlPlugin {
 
     BigQuerySqlPlugin(PluginWrapper wrapper) {
         super(wrapper)
-        DriverFactory.instance.addDriver('bigquery','com.simba.googlebigquery.jdbc.Driver')
-        println DriverFactory.instance.drivers
+        DriverRegistry.DEFAULT = new BigQueryDriverRegistry()
     }
 }

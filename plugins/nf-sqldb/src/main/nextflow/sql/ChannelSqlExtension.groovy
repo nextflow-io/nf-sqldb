@@ -31,7 +31,6 @@ import nextflow.extension.DataflowHelper
 import nextflow.plugin.extension.Factory
 import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
-import nextflow.sql.config.DriverFactory
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper

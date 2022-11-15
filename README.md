@@ -31,6 +31,15 @@ plugins {
 The above declaration allows the use of the SQL plugin functionalities in your Nextflow pipelines.
 See the section below to configure the connection properties with a database instance.
 
+For BigQuery datasource you need to use the nf-bigquery plugin
+
+```
+plugins {
+  id 'nf-bigquery@0.0.1'
+}
+```
+
+
 ## Configuration
 
 The target database connection coordinates are specified in the `nextflow.config` file using the
