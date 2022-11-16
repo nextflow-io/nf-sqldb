@@ -81,7 +81,7 @@ class SqlDslTest extends Dsl2Spec {
 
         when:
         def SCRIPT = """
-            include { fromQuery } from 'plugin/nf-sqldb'
+            include { fromQuery } from 'plugin/nf-bigquery'
 
             def sql = \"\"\"
                 SELECT *
