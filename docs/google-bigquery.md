@@ -41,7 +41,7 @@ sql {
 Once the configuration has been setup correctly, you can use it in the Nextflow code as shown below
 
 ```nextflow
-include { fromQuery } from 'plugin/nf-sqldb'
+include { fromQuery } from 'plugin/nf-bigquery'
 
 def googleSqlQuery = """
                 SELECT *
