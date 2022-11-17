@@ -64,18 +64,12 @@ dependencies {
     compileOnly 'org.pf4j:pf4j:3.4.1'
 
     api("org.codehaus.groovy:groovy-sql:3.0.10") { transitive = false }
-    api 'com.h2database:h2:1.4.200'
-    api 'mysql:mysql-connector-java:8.0.22'
-    api 'org.mariadb.jdbc:mariadb-java-client:2.7.0'
-    api 'org.postgresql:postgresql:42.2.23'
-    api 'org.xerial:sqlite-jdbc:3.36.0.3'
-    api 'org.duckdb:duckdb_jdbc:0.3.0'
 
+    api project(":plugins:nf-sqldb")
 
-    // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
-    // Reference https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
-    api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
-
+    // JDBC driver setup for Google BigQuery - the 3rd party JAR are being downloaded and setup as gradle tasks below.
+    // Reference https://cloud.google.com/bigquery/docs/reference/odbc-jdbc-drivers
+    api files('src/dist/lib/GoogleBigQueryJDBC42.jar')
     //NOTE: Had to remove the slf4j jar due to a conflict
     implementation fileTree(dir: 'src/dist/lib/libs', include: '*.jar')
 
@@ -105,33 +99,42 @@ test {
 }
 
 /**
- * AWS Athena
+ * Google BigQuery
  * The following tasks download and confirm the MD5 checksum of the ZIP archive
- * for Simba Athena JDBC driver and extract its contents to the build directory
- * Reference: https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
+ * for Simba BigQuery JDBC driver and extract its contents to the build directory
+ * Reference: https://cloud.google.com/bigquery/docs/reference/odbc-jdbc-drivers
  */
-task downloadAthenDep(type: Download) {
-    src 'https://s3.amazonaws.com/athena-downloads/drivers/JDBC/SimbaAthenaJDBC-2.0.25.1001/SimbaAthenaJDBC-2.0.25.1001.zip'
-    dest new File(buildDir, 'downloads/SimbaAthenaJDBC-2.0.25.1001.zip')
+task downloadBigqueryDep(type: Download) {
+    src 'https://storage.googleapis.com/simba-bq-release/jdbc/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip'
+    dest new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip')
     overwrite false
 }
 
-task verifyAthenDep(type: Verify, dependsOn: downloadAthenDep) {
-    src new File(buildDir, 'downloads/SimbaAthenaJDBC-2.0.25.1001.zip')
+task verifyBigqueryDep(type: Verify, dependsOn: downloadBigqueryDep) {
+    src new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip')
     algorithm 'MD5'
-    checksum '71504d0317656d790978363358d0c068'
+    checksum '2e54169cfba2050f0a0f01bcf12c8aa7'
 }
 
-task unzipAthenDep(dependsOn: verifyAthenDep, type: Copy) {
-    from zipTree(new File(buildDir, 'downloads/SimbaAthenaJDBC-2.0.25.1001.zip'))
-    into "${buildDir}/downloads/unzip/awsathena/"
+task unzipBigqueryDep(dependsOn: verifyBigqueryDep, type: Copy) {
+    from zipTree(new File(buildDir, 'downloads/SimbaJDBCDriverforGoogleBigQuery42_1.3.0.1001.zip'))
+    into "${buildDir}/downloads/unzip/googlebigquery"
+}
+unzipBigqueryDep.doLast{
+    file("${buildDir}/downloads/unzip/googlebigquery/libs/slf4j-api-1.7.36.jar").delete()
 }
 
 // Files under src/dist are included into the distribution zip
 // https://docs.gradle.org/current/userguide/application_plugin.html
-task copyAthenDep(dependsOn: unzipAthenDep, type: Copy) {
-    from file(new File(buildDir, '/downloads/unzip/awsathena/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
+task copyBigqueryDep(dependsOn: unzipBigqueryDep, type: Copy) {
+    from file(new File(buildDir, '/downloads/unzip/googlebigquery/GoogleBigQueryJDBC42.jar'))
     into "src/dist/lib"
 }
-project.copyPluginLibs.dependsOn('copyAthenDep')
-project.compileGroovy.dependsOn('copyAthenDep')
+
+task copyBigqueryLibs(dependsOn: copyBigqueryDep, type: Copy) {
+    from file(new File(buildDir, '/downloads/unzip/googlebigquery/libs'))
+    into "src/dist/lib/libs"
+}
+
+project.copyPluginLibs.dependsOn('copyBigqueryLibs')
+project.compileGroovy.dependsOn('copyBigqueryLibs')

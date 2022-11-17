@@ -54,20 +54,8 @@ class SqlDataSource {
         this.password = opts.password ?: fallback.password
     }
 
-
     protected String urlToDriver(String url) {
-        if( !url ) return null
-        if( !url.startsWith('jdbc:') ) throw new IllegalArgumentException("Invalid database JDBC connection url: $url")
-        switch (url.tokenize(':')[1]) {
-            case 'h2': return 'org.h2.Driver'
-            case 'sqlite': return 'org.sqlite.JDBC'
-            case 'mysql': return 'com.mysql.cj.jdbc.Driver'
-            case 'mariadb': return 'org.mariadb.jdbc.Driver'
-            case 'postgresql': return 'org.postgresql.Driver'
-            case 'duckdb': return 'org.duckdb.DuckDBDriver'
-            case 'awsathena': return 'com.simba.athena.jdbc.Driver'
-        }
-        return null
+        DriverRegistry.DEFAULT.urlToDriver(url)
     }
 
     Map toMap() {

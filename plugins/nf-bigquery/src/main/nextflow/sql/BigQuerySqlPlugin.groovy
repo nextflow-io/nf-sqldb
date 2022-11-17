@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, Seqera Labs
+ * Copyright 2020-2022, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,10 +12,23 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-rootProject.name = 'nf-sqldb'
-include 'plugins'
-include('plugins:nf-sqldb')
-include('plugins:nf-bigquery')
+package nextflow.sql
 
+import nextflow.sql.config.DriverRegistry
+import org.pf4j.PluginWrapper
+
+/**
+ * Implements BigQuerySQL plugin for Nextflow
+ *
+ * @author : jorge <jorge.aguilera@seqera.io>
+ */
+class BigQuerySqlPlugin extends SqlPlugin {
+
+    BigQuerySqlPlugin(PluginWrapper wrapper) {
+        super(wrapper)
+        DriverRegistry.DEFAULT = new BigQueryDriverRegistry()
+    }
+}

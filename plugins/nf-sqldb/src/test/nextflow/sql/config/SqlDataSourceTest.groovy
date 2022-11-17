@@ -102,7 +102,7 @@ class SqlDataSourceTest extends Specification {
                 password: 'secret']
         and:
         def ds = new SqlDataSource(config)
-        
+
         expect:
         ds.url == 'jdbc:xyz:host-name'
         ds.driver == 'this.that.Driver'
