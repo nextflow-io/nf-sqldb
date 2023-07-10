@@ -93,7 +93,7 @@ The following options are available:
 : When `true`, the column names in the `SELECT` statement are emitted as the first tuple in the resulting channel.
 
 `trailingSemicolon`
-: WHen `true`, append a semicolon `;` to the end of the SQL query if it is not present (default: `true`).
+: When `true`, append a semicolon `;` to the end of the SQL query if it is not present (default: `true`).
 
 ### sqlInsert
 
