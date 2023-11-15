@@ -70,7 +70,7 @@ class SqlDslTest extends Dsl2Spec {
     }
     def 'should perform a query and create a channel' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = 'jdbc:duckdb:' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
@@ -99,7 +99,7 @@ class SqlDslTest extends Dsl2Spec {
 
     def 'should insert channel data into a db table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = 'jdbc:duckdb:' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
@@ -130,7 +130,7 @@ class SqlDslTest extends Dsl2Spec {
 
     def 'should insert channel data into a db table in batches' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = 'jdbc:duckdb:' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
@@ -163,7 +163,7 @@ class SqlDslTest extends Dsl2Spec {
 
     def 'should perform a query with headers and create a channel' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = 'jdbc:duckdb:' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
