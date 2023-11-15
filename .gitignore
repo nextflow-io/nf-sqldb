@@ -3,3 +3,5 @@
 .nextflow
 build
 dist
+
+.devenv/
