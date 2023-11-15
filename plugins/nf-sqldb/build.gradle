@@ -26,7 +26,7 @@ group = 'io.nextflow'
 // THE VERSION FOR PLUGINS IS DEFINED IN THE `/resources/META-INF/MANIFEST.NF` file
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
+        languageVersion = JavaLanguageVersion.of(19)
     }
 }
 
@@ -55,7 +55,7 @@ sourceSets {
 }
 
 ext{
-    nextflowVersion = '22.08.1-edge'
+    nextflowVersion = '23.10.0'
 }
 
 dependencies {
