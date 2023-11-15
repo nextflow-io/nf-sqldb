@@ -118,6 +118,7 @@ class SqlDslTest extends Dsl2Spec {
             '''
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+
         then:
         result.val == 100
         result.val == 200
@@ -150,6 +151,7 @@ class SqlDslTest extends Dsl2Spec {
             '''
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+
         then:
         result.val == 100
         result.val == 200
@@ -186,6 +188,7 @@ class SqlDslTest extends Dsl2Spec {
             '''
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+
         then:
         result.val == ['id', 'alpha', 'omega']
         result.val == [1, 'hola', 10]
