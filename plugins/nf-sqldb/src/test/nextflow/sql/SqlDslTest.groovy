@@ -165,7 +165,6 @@ class SqlDslTest extends Dsl2Spec {
 
     }
 
-    @FailsWith(org.spockframework.runtime.ConditionNotSatisfiedError)
     def 'should perform a query with headers and create a channel' () {
         given:
         def JDBC_URL = 'jdbc:duckdb:' + Random.newInstance().nextInt(1_000_000)
@@ -188,7 +187,7 @@ class SqlDslTest extends Dsl2Spec {
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
         then:
-        result.val == ['ID', 'ALPHA', 'OMEGA']
+        result.val == ['id', 'alpha', 'omega']
         result.val == [1, 'hola', 10]
         result.val == [2, 'ciao', 20]
         result.val == [3, 'hello', 30]
