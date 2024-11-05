@@ -1,5 +1,15 @@
 NF-SQLDB CHANGE-LOG
 ===================
+0.6.0 - 5 Nov 2024
+- Update build scripts
+- Remove nf-bigquery plugin
+- Bump Nextflow to version 24.04.0
+- Bump mysql-connector-java:8.0.33
+- Bump mariadb-java-client:2.7.0
+- Bump postgresql:42.7.4
+- Bump sqlite-jdbc:3.47.0.0
+- Bump duckdb_jdbc:0.10.2
+
 0.5.0 - 30 Aug 2022
 - Bump nextflow required version to 22.08.1-edge
 

@@ -15,8 +15,8 @@
  */
 
 plugins {
-    id 'java-library'
-    id 'groovy'
+    // Apply the groovy plugin to add support for Groovy
+    id 'io.nextflow.groovy-library-conventions'
     id 'idea'
     id 'de.undercouch.download' version '4.1.2'
 }
@@ -24,11 +24,6 @@ plugins {
 group = 'io.nextflow'
 // DO NOT SET THE VERSION HERE
 // THE VERSION FOR PLUGINS IS DEFINED IN THE `/resources/META-INF/MANIFEST.NF` file
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
-    }
-}
 
 idea {
     module.inheritOutputDirs = true
@@ -36,6 +31,7 @@ idea {
 
 repositories {
     mavenCentral()
+    maven { url = 'https://jitpack.io' }
     maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
     maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
 }
@@ -55,21 +51,21 @@ sourceSets {
 }
 
 ext{
-    nextflowVersion = '22.08.1-edge'
+    nextflowVersion = '24.04.0'
 }
 
 dependencies {
     compileOnly "io.nextflow:nextflow:$nextflowVersion"
-    compileOnly 'org.slf4j:slf4j-api:1.7.10'
-    compileOnly 'org.pf4j:pf4j:3.4.1'
-
-    api("org.codehaus.groovy:groovy-sql:3.0.10") { transitive = false }
+    compileOnly 'org.slf4j:slf4j-api:2.0.7'
+    compileOnly 'org.pf4j:pf4j:3.12.0'
+    
+    api("org.apache.groovy:groovy-sql:4.0.23") { transitive = false }
     api 'com.h2database:h2:1.4.200'
-    api 'mysql:mysql-connector-java:8.0.22'
+    api 'mysql:mysql-connector-java:8.0.33'
     api 'org.mariadb.jdbc:mariadb-java-client:2.7.0'
-    api 'org.postgresql:postgresql:42.2.23'
-    api 'org.xerial:sqlite-jdbc:3.36.0.3'
-    api 'org.duckdb:duckdb_jdbc:0.3.0'
+    api 'org.postgresql:postgresql:42.7.4'
+    api 'org.xerial:sqlite-jdbc:3.47.0.0'
+    api 'org.duckdb:duckdb_jdbc:0.10.2'
 
 
     // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
@@ -79,25 +75,24 @@ dependencies {
     //NOTE: Had to remove the slf4j jar due to a conflict
     implementation fileTree(dir: 'src/dist/lib/libs', include: '*.jar')
 
-
+    // test configuration
+    testImplementation "org.apache.groovy:groovy:4.0.23"
+    testImplementation "org.apache.groovy:groovy-nio:4.0.23"
     testImplementation "io.nextflow:nextflow:$nextflowVersion"
-    testImplementation "org.codehaus.groovy:groovy:3.0.10"
-    testImplementation "org.codehaus.groovy:groovy-nio:3.0.10"
-    testImplementation("org.codehaus.groovy:groovy-test:3.0.10") { exclude group: 'org.codehaus.groovy' }
-    testImplementation("cglib:cglib-nodep:3.3.0")
-    testImplementation("org.objenesis:objenesis:3.2")
-    testImplementation("org.spockframework:spock-core:2.1-groovy-3.0") {
-        exclude group: 'org.codehaus.groovy';
-        exclude group: 'net.bytebuddy'
-    }
-    testImplementation('org.spockframework:spock-junit4:2.1-groovy-3.0') {
-        exclude group: 'org.codehaus.groovy';
-        exclude group: 'net.bytebuddy'
-    }
-    testImplementation('com.google.jimfs:jimfs:1.1')
+    testImplementation ("org.apache.groovy:groovy-test:4.0.23") { exclude group: 'org.apache.groovy' }
+    testImplementation ("cglib:cglib-nodep:3.3.0")
+    testImplementation ("org.objenesis:objenesis:3.1")
+    testImplementation ("org.spockframework:spock-core:2.3-groovy-4.0") { exclude group: 'org.apache.groovy'; exclude group: 'net.bytebuddy' }
+    testImplementation ('org.spockframework:spock-junit4:2.3-groovy-4.0') { exclude group: 'org.apache.groovy'; exclude group: 'net.bytebuddy' }
+    testImplementation ('com.google.jimfs:jimfs:1.1')
 
     testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
     testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
+
+    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sec:module_replacement
+    modules {
+        module("commons-logging:commons-logging") { replacedBy("org.slf4j:jcl-over-slf4j") }
+    }
 }
 
 test {

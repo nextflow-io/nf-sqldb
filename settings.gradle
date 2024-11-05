@@ -17,5 +17,4 @@
 rootProject.name = 'nf-sqldb'
 include 'plugins'
 include('plugins:nf-sqldb')
-include('plugins:nf-bigquery')
 
