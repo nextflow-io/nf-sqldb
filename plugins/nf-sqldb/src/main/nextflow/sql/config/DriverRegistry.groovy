@@ -25,6 +25,7 @@ class DriverRegistry {
         drivers.'postgresql'= 'org.postgresql.Driver'
         drivers.'duckdb'= 'org.duckdb.DuckDBDriver'
         drivers.'awsathena'= 'com.simba.athena.jdbc.Driver'
+        drivers.'databricks'= 'com.databricks.client.jdbc.Driver'
     }
 
     void addDriver(String name, String driver){
