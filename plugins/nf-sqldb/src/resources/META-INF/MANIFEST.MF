@@ -3,4 +3,4 @@ Plugin-Class: nextflow.sql.SqlPlugin
 Plugin-Id: nf-sqldb
 Plugin-Provider: Seqera Labs
 Plugin-Version: 0.6.0
-Plugin-Requires: >=24.01.0-edge
+Plugin-Requires: >=24.04.0

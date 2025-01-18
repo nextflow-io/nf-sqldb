@@ -32,7 +32,7 @@ import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Timeout
 import test.Dsl2Spec
-import test.MockScriptRunner
+import test.helpers.MockScriptRunner
 
 import java.nio.file.Path
 

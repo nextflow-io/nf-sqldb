@@ -15,7 +15,7 @@
  *
  */
 
-package test
+package test.helpers
 
 import java.nio.file.Paths
 
@@ -147,13 +147,13 @@ class MockMonitor implements TaskMonitor {
      *
      * @param handler A not null {@code TaskHandler} instance
      */
-    boolean evict(TaskHandler handler) { }
+    boolean evict(TaskHandler handler) { return null }
 
     /**
      * Start the monitoring activity for the queued tasks
      * @return The instance itself, useful to chain methods invocation
      */
-    TaskMonitor start() { }
+    TaskMonitor start() { return null }
 
     /**
      * Notify when a task terminates
@@ -190,8 +190,10 @@ class MockTaskHandler extends TaskHandler {
 
     @Override
     boolean checkIfCompleted() {
-        true
+        return true
     }
+
+    protected void killTask() { }
 
     @Override
     void kill() { }

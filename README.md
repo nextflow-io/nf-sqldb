@@ -6,7 +6,6 @@ The following databases are currently supported:
 
 * [AWS Athena](https://aws.amazon.com/athena/) (Setup guide [here](docs/aws-athena.md))
 * [DuckDB](https://duckdb.org/)
-* [Google BigQuery](https://cloud.google.com/bigquery) (Setup guide [here](docs/google-bigquery.md))
 * [H2](https://www.h2database.com)
 * [MySQL](https://www.mysql.com/)
 * [MariaDB](https://mariadb.org/)
@@ -25,13 +24,6 @@ plugins {
 }
 ```
 
-Support for BigQuery is provided in a separate plugin:
-
-```groovy
-plugins {
-    id 'nf-bigquery'
-}
-```
 
 ## Configuration
 
