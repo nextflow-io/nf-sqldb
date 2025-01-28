@@ -23,4 +23,4 @@ plugins {
 rootProject.name = 'nf-sqldb'
 include 'plugins'
 include('plugins:nf-sqldb')
-includeBuild('../nextflow')
+
