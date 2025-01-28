@@ -66,7 +66,7 @@ dependencies {
     api 'org.postgresql:postgresql:42.7.4'
     api 'org.xerial:sqlite-jdbc:3.47.0.0'
     api 'org.duckdb:duckdb_jdbc:0.10.2'
-    api('com.databricks:databricks-jdbc:2.7.1') //{ exclude group: 'commons-logging' }
+    api('com.databricks:databricks-jdbc:0.9.8-oss') { exclude group: 'commons-logging' }
 
 
     // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
