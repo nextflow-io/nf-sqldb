@@ -71,6 +71,7 @@ class QueryHandler implements QueryOp<QueryHandler> {
     private Integer batchSize
     private long batchDelayMillis = 100
     private int queryCount
+    private boolean executeUpdate = false
 
     @Override
     QueryOp withStatement(String stm) {
@@ -97,6 +98,8 @@ class QueryHandler implements QueryOp<QueryHandler> {
             this.batchSize = opts.batchSize as Integer
         if( opts.batchDelay )
             this.batchDelayMillis = opts.batchDelay as long
+        if( opts.executeUpdate )
+            this.executeUpdate = opts.executeUpdate as boolean
         return this
     }
 
@@ -156,10 +159,29 @@ class QueryHandler implements QueryOp<QueryHandler> {
     protected void query0(Connection conn) {
         try {
             try (Statement stm = conn.createStatement()) {
-                try( def rs = stm.executeQuery(normalize(statement)) ) {
-                    if( emitColumns )
-                        emitColumns(rs)
-                    emitRowsAndClose(rs)
+                final String normalizedStmt = normalize(statement)
+                // Check if statement is a DDL or UPDATE statement that doesn't return a ResultSet
+                boolean isUpdateOrDdl = executeUpdate || 
+                                       normalizedStmt.toUpperCase().startsWith("CREATE ") || 
+                                       normalizedStmt.toUpperCase().startsWith("ALTER ") || 
+                                       normalizedStmt.toUpperCase().startsWith("DROP ") || 
+                                       normalizedStmt.toUpperCase().startsWith("INSERT ") ||
+                                       normalizedStmt.toUpperCase().startsWith("UPDATE ") ||
+                                       normalizedStmt.toUpperCase().startsWith("DELETE ");
+                
+                if (isUpdateOrDdl) {
+                    // Use executeUpdate for statements that don't return ResultSets
+                    stm.executeUpdate(normalizedStmt)
+                    // Since there's no ResultSet to emit, just close the channel
+                    target.bind(Channel.STOP)
+                } 
+                else {
+                    // For SELECT and other queries that return ResultSets
+                    try (def rs = stm.executeQuery(normalizedStmt)) {
+                        if (emitColumns)
+                            emitColumns(rs)
+                        emitRowsAndClose(rs)
+                    }
                 }
             }
         }
