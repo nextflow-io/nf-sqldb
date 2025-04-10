@@ -14,19 +14,34 @@
  * limitations under the License.
  */
 
-plugins {
-    // Apply the groovy plugin to add support for Groovy
-    id 'io.nextflow.groovy-library-conventions'
-    id 'idea'
-    id 'de.undercouch.download' version '4.1.2'
+// Add the download plugin
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'de.undercouch:gradle-download-task:4.1.2'
+    }
 }
 
-group = 'io.nextflow'
-// DO NOT SET THE VERSION HERE
-// THE VERSION FOR PLUGINS IS DEFINED IN THE `/resources/META-INF/MANIFEST.NF` file
+plugins {
+    id 'io.nextflow.nextflow-plugin' version '0.0.1-alpha'
+}
 
-idea {
-    module.inheritOutputDirs = true
+sourceSets {
+    main {
+        groovy {
+            srcDirs = ['src/main/groovy']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+    test {
+        groovy {
+            srcDirs = ['src/test/groovy']
+        }
+    }
 }
 
 repositories {
@@ -36,29 +51,8 @@ repositories {
     maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
 }
 
-configurations {
-    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sub:exclude_transitive_dependencies
-    runtimeClasspath.exclude group: 'org.slf4j', module: 'slf4j-api'
-}
-
-sourceSets {
-    main.java.srcDirs = []
-    main.groovy.srcDirs = ['src/main']
-    main.resources.srcDirs = ['src/resources']
-    test.groovy.srcDirs = ['src/test']
-    test.java.srcDirs = []
-    test.resources.srcDirs = []
-}
-
-ext{
-    nextflowVersion = '24.04.0'
-}
-
 dependencies {
-    compileOnly "io.nextflow:nextflow:$nextflowVersion"
-    compileOnly 'org.slf4j:slf4j-api:2.0.7'
-    compileOnly 'org.pf4j:pf4j:3.12.0'
-    
+    // API dependencies from the original build.gradle
     api("org.apache.groovy:groovy-sql:4.0.23") { transitive = false }
     api 'com.h2database:h2:1.4.200'
     api 'mysql:mysql-connector-java:8.0.33'
@@ -66,19 +60,17 @@ dependencies {
     api 'org.postgresql:postgresql:42.7.4'
     api 'org.xerial:sqlite-jdbc:3.47.0.0'
     api 'org.duckdb:duckdb_jdbc:0.10.2'
-
-
-    // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
-    // Reference https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
+    
+    // Replace commons-logging with jcl-over-slf4j
+    implementation 'org.slf4j:jcl-over-slf4j:2.0.7'
+    
+    // JDBC driver for AWS Athena
     api files('src/dist/lib/AthenaJDBC42_2.0.25.1001.jar')
-
-    //NOTE: Had to remove the slf4j jar due to a conflict
     implementation fileTree(dir: 'src/dist/lib/libs', include: '*.jar')
-
-    // test configuration
+    
+    // Test dependencies
     testImplementation "org.apache.groovy:groovy:4.0.23"
     testImplementation "org.apache.groovy:groovy-nio:4.0.23"
-    testImplementation "io.nextflow:nextflow:$nextflowVersion"
     testImplementation ("org.apache.groovy:groovy-test:4.0.23") { exclude group: 'org.apache.groovy' }
     testImplementation ("cglib:cglib-nodep:3.3.0")
     testImplementation ("org.objenesis:objenesis:3.1")
@@ -86,25 +78,59 @@ dependencies {
     testImplementation ('org.spockframework:spock-junit4:2.3-groovy-4.0') { exclude group: 'org.apache.groovy'; exclude group: 'net.bytebuddy' }
     testImplementation ('com.google.jimfs:jimfs:1.1')
 
-    testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
-    testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
+    // Add back Nextflow test dependencies
+    testImplementation "io.nextflow:nextflow:${nextflowPlugin.nextflowVersion}"
+    testImplementation(testFixtures("io.nextflow:nextflow:${nextflowPlugin.nextflowVersion}"))
+    testImplementation(testFixtures("io.nextflow:nf-commons:${nextflowPlugin.nextflowVersion}"))
+}
 
-    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sec:module_replacement
-    modules {
-        module("commons-logging:commons-logging") { replacedBy("org.slf4j:jcl-over-slf4j") }
+configurations {
+    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sub:exclude_transitive_dependencies
+    runtimeClasspath.exclude group: 'org.slf4j', module: 'slf4j-api'
+}
+
+// Use the version from the MANIFEST.MF
+version = '0.6.0'
+
+nextflowPlugin {
+    // From the MANIFEST.MF
+    nextflowVersion = '24.04.0'
+    
+    provider = 'Seqera Labs'
+    className = 'nextflow.sql.SqlPlugin'
+    extensionPoints = [
+        'nextflow.sql.ChannelSqlExtension'
+    ]
+    
+    publishing {
+        github {
+            repository = 'seqera/nf-sqldb'
+            userName = project.findProperty('github_username')
+            authToken = project.findProperty('github_access_token')
+            email = project.findProperty('github_commit_email')
+            
+            // You may need to adjust this URL if the central plugin index is different
+            indexUrl = 'https://github.com/nextflow-io/plugins/main/plugins.json'
+        }
     }
 }
 
-test {
-    useJUnitPlatform()
+// Configure the packagePlugin task to handle duplicates
+tasks.named('packagePlugin') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-/**
- * AWS Athena
- * The following tasks download and confirm the MD5 checksum of the ZIP archive
- * for Simba Athena JDBC driver and extract its contents to the build directory
- * Reference: https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
- */
+// Add test configuration for Java modules
+test {
+    useJUnitPlatform()
+    jvmArgs = ['--add-opens=java.base/java.lang=ALL-UNNAMED',
+               '--add-opens=java.base/java.util=ALL-UNNAMED',
+               '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED']
+}
+
+// AWS Athena dependencies setup - migrated from the original build.gradle
+apply plugin: 'de.undercouch.download'
+
 task downloadAthenDep(type: Download) {
     src 'https://s3.amazonaws.com/athena-downloads/drivers/JDBC/SimbaAthenaJDBC-2.0.25.1001/SimbaAthenaJDBC-2.0.25.1001.zip'
     dest new File(buildDir, 'downloads/SimbaAthenaJDBC-2.0.25.1001.zip')
@@ -122,11 +148,13 @@ task unzipAthenDep(dependsOn: verifyAthenDep, type: Copy) {
     into "${buildDir}/downloads/unzip/awsathena/"
 }
 
-// Files under src/dist are included into the distribution zip
-// https://docs.gradle.org/current/userguide/application_plugin.html
 task copyAthenDep(dependsOn: unzipAthenDep, type: Copy) {
     from file(new File(buildDir, '/downloads/unzip/awsathena/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
     into "src/dist/lib"
 }
-project.copyPluginLibs.dependsOn('copyAthenDep')
-project.compileGroovy.dependsOn('copyAthenDep')
+
+// Make sure compileGroovy depends on copyAthenDep
+compileGroovy.dependsOn(copyAthenDep)
+
+// Hook into the assemble task to ensure Athena dependencies are properly set up
+assemble.dependsOn('copyAthenDep') 
