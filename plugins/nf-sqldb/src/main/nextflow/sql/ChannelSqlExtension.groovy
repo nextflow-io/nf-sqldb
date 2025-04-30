@@ -24,6 +24,7 @@ import groovyx.gpars.dataflow.DataflowReadChannel
 import groovyx.gpars.dataflow.DataflowWriteChannel
 import groovyx.gpars.dataflow.expression.DataflowExpression
 import nextflow.Channel
+import nextflow.Global
 import nextflow.NF
 import nextflow.Session
 import nextflow.extension.CH
@@ -34,6 +35,8 @@ import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
+import java.sql.Connection
+import java.sql.Statement
 /**
  * Provide a channel factory extension that allows the execution of Sql queries
  *
@@ -133,4 +136,101 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         return target
     }
 
+    private static final Map EXECUTE_PARAMS = [
+            db: CharSequence,
+            statement: CharSequence
+    ]
+
+    /**
+     * Execute a SQL statement that does not return a result set (DDL/DML statements)
+     *
+     * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
+     */
+    static void execute(Map params) {
+        CheckHelper.checkParams('execute', params, EXECUTE_PARAMS)
+        
+        final String dbName = params.db as String ?: 'default'
+        final String statement = params.statement as String
+        
+        if (!statement)
+            throw new IllegalArgumentException("Missing required parameter 'statement'")
+            
+        final sqlConfig = new SqlConfig((Map) Global.session.config.navigate('sql.db'))
+        final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
+        
+        if (dataSource == null) {
+            def msg = "Unknown db name: $dbName"
+            def choices = sqlConfig.getDataSourceNames().closest(dbName) ?: sqlConfig.getDataSourceNames()
+            if (choices?.size() == 1)
+                msg += " - Did you mean: ${choices.get(0)}?"
+            else if (choices)
+                msg += " - Did you mean any of these?\n" + choices.collect { "  $it" }.join('\n') + '\n'
+            throw new IllegalArgumentException(msg)
+        }
+        
+        try (Connection conn = Sql.newInstance(dataSource.toMap()).getConnection()) {
+            try (Statement stm = conn.createStatement()) {
+                stm.execute(normalizeStatement(statement))
+            }
+        }
+        catch (Exception e) {
+            log.error("Error executing SQL statement: ${e.message}", e)
+            throw e
+        }
+    }
+
+    /**
+     * Execute a SQL statement that does not return a result set (DDL/DML statements)
+     * and returns the number of affected rows
+     *
+     * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
+     * @return The number of rows affected by the SQL statement
+     */
+    static int executeUpdate(Map params) {
+        CheckHelper.checkParams('executeUpdate', params, EXECUTE_PARAMS)
+        
+        final String dbName = params.db as String ?: 'default'
+        final String statement = params.statement as String
+        
+        if (!statement)
+            throw new IllegalArgumentException("Missing required parameter 'statement'")
+            
+        final sqlConfig = new SqlConfig((Map) Global.session.config.navigate('sql.db'))
+        final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
+        
+        if (dataSource == null) {
+            def msg = "Unknown db name: $dbName"
+            def choices = sqlConfig.getDataSourceNames().closest(dbName) ?: sqlConfig.getDataSourceNames()
+            if (choices?.size() == 1)
+                msg += " - Did you mean: ${choices.get(0)}?"
+            else if (choices)
+                msg += " - Did you mean any of these?\n" + choices.collect { "  $it" }.join('\n') + '\n'
+            throw new IllegalArgumentException(msg)
+        }
+        
+        try (Connection conn = Sql.newInstance(dataSource.toMap()).getConnection()) {
+            try (Statement stm = conn.createStatement()) {
+                return stm.executeUpdate(normalizeStatement(statement))
+            }
+        }
+        catch (Exception e) {
+            log.error("Error executing SQL update statement: ${e.message}", e)
+            throw e
+        }
+    }
+    
+    /**
+     * Normalizes a SQL statement by adding a semicolon if needed
+     *
+     * @param statement The SQL statement to normalize
+     * @return The normalized SQL statement
+     */
+    private static String normalizeStatement(String statement) {
+        if (!statement)
+            throw new IllegalArgumentException("Missing SQL statement")
+        def result = statement.trim()
+        if (!result.endsWith(';'))
+            result += ';'
+        return result
+    }
 }
