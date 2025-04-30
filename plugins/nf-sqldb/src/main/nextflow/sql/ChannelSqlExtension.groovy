@@ -37,6 +37,7 @@ import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
 import java.sql.Connection
 import java.sql.Statement
+import groovy.sql.Sql
 /**
  * Provide a channel factory extension that allows the execution of Sql queries
  *
@@ -168,7 +169,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             throw new IllegalArgumentException(msg)
         }
         
-        try (Connection conn = Sql.newInstance(dataSource.toMap()).getConnection()) {
+        try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
             try (Statement stm = conn.createStatement()) {
                 stm.execute(normalizeStatement(statement))
             }
@@ -208,7 +209,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             throw new IllegalArgumentException(msg)
         }
         
-        try (Connection conn = Sql.newInstance(dataSource.toMap()).getConnection()) {
+        try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
             try (Statement stm = conn.createStatement()) {
                 return stm.executeUpdate(normalizeStatement(statement))
             }
