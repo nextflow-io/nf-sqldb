@@ -47,8 +47,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             db: CharSequence,
             emitColumns: Boolean,
             batchSize: Integer,
-            batchDelay: Integer,
-            executeUpdate: Boolean
+            batchDelay: Integer
     ]
 
     private static final Map INSERT_PARAMS = [
