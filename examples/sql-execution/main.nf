@@ -19,49 +19,55 @@ workflow {
 
     // Step 1: Create a table
     log.info "Creating a sample table..."
-    execute(
+    def createResult = executeUpdate(
         db: 'demo',
         statement: '''
-            CREATE TABLE IF NOT EXISTS test_table (
-                id INTEGER PRIMARY KEY,
-                name VARCHAR(100),
-                value DOUBLE
+            CREATE TABLE IF NOT EXISTS TEST_TABLE (
+                ID INTEGER PRIMARY KEY,
+                NAME VARCHAR(100),
+                VALUE DOUBLE
             )
         '''
     )
+    log.info "Create table result: $createResult"
 
     // Step 2: Insert some data
     log.info "Inserting data..."
-    execute(
+    executeUpdate(
         db: 'demo',
         statement: '''
-            INSERT INTO test_table (id, name, value) VALUES
+            INSERT INTO TEST_TABLE (ID, NAME, VALUE) VALUES
             (1, 'alpha', 10.5),
             (2, 'beta', 20.7),
             (3, 'gamma', 30.2),
-            (4, 'delta', 40.9)
+            (4, 'delta', 40.9);
         '''
     )
 
-    // Step 3: Update data and get affected row count
+    // Step 3: Update some data
     log.info "Updating data..."
-    def updatedRows = executeUpdate(
+    executeUpdate(
         db: 'demo',
-        statement: "UPDATE test_table SET value = value * 2 WHERE value > 20"
+        statement: '''
+            UPDATE TEST_TABLE
+            SET VALUE = VALUE * 2
+            WHERE ID = 2;
+        '''
     )
-    log.info "Updated $updatedRows row(s)"
 
-    // Step 4: Delete data and get affected row count
+    // Step 4: Delete some data
     log.info "Deleting data..."
-    def deletedRows = executeUpdate(
+    executeUpdate(
         db: 'demo',
-        statement: "DELETE FROM test_table WHERE value > 60"
+        statement: '''
+            DELETE FROM TEST_TABLE
+            WHERE ID = 4;
+        '''
     )
-    log.info "Deleted $deletedRows row(s)"
 
-    // Step 5: Query the results to verify
-    log.info "Querying remaining data..."
+    // Step 5: Query results
+    log.info "Querying results..."
     channel
-        .fromQuery("SELECT * FROM test_table ORDER BY id", db: 'demo')
+        .fromQuery("SELECT * FROM TEST_TABLE ORDER BY ID", db: 'demo')
         .view { row -> "ID: ${row[0]}, Name: ${row[1]}, Value: ${row[2]}" }
 } 
