@@ -46,12 +46,14 @@ class SqlExecutionTest extends Specification {
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Creating a table'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'CREATE TABLE test_table(id INT PRIMARY KEY, name VARCHAR(255))'
         ])
@@ -60,7 +62,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() > 0
         
         when: 'Altering the table'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'ALTER TABLE test_table ADD COLUMN description VARCHAR(255)'
         ])
@@ -69,7 +71,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'TEST_TABLE\' AND COLUMN_NAME = \'DESCRIPTION\'').size() > 0
         
         when: 'Dropping the table'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'DROP TABLE test_table'
         ])
@@ -87,12 +89,14 @@ class SqlExecutionTest extends Specification {
         sql.execute('CREATE TABLE test_dml(id INT PRIMARY KEY, name VARCHAR(255), value INT)')
         
         and:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Inserting data'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'INSERT INTO test_dml (id, name, value) VALUES (1, \'item1\', 100)'
         ])
@@ -102,7 +106,7 @@ class SqlExecutionTest extends Specification {
         sql.firstRow('SELECT * FROM test_dml WHERE id = 1').name == 'item1'
         
         when: 'Updating data'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'UPDATE test_dml SET value = 200 WHERE id = 1'
         ])
@@ -111,7 +115,7 @@ class SqlExecutionTest extends Specification {
         sql.firstRow('SELECT value FROM test_dml WHERE id = 1').value == 200
         
         when: 'Deleting data'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'DELETE FROM test_dml WHERE id = 1'
         ])
@@ -132,12 +136,14 @@ class SqlExecutionTest extends Specification {
         sql.execute('INSERT INTO test_update VALUES (3, \'item3\', 100)')
         
         and:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Inserting data with executeUpdate'
-        def insertCount = ChannelSqlExtension.executeUpdate([
+        def insertCount = sqlExtension.executeUpdate([
             db: 'test',
             statement: 'INSERT INTO test_update (id, name, value) VALUES (4, \'item4\', 100)'
         ])
@@ -147,7 +153,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT * FROM test_update').size() == 4
         
         when: 'Updating multiple rows'
-        def updateCount = ChannelSqlExtension.executeUpdate([
+        def updateCount = sqlExtension.executeUpdate([
             db: 'test',
             statement: 'UPDATE test_update SET value = 200 WHERE value = 100'
         ])
@@ -157,7 +163,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT * FROM test_update WHERE value = 200').size() == 4
         
         when: 'Deleting multiple rows'
-        def deleteCount = ChannelSqlExtension.executeUpdate([
+        def deleteCount = sqlExtension.executeUpdate([
             db: 'test',
             statement: 'DELETE FROM test_update WHERE value = 200'
         ])
@@ -173,12 +179,14 @@ class SqlExecutionTest extends Specification {
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Executing invalid SQL'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'INVALID SQL STATEMENT'
         ])
@@ -187,7 +195,7 @@ class SqlExecutionTest extends Specification {
         thrown(Exception)
         
         when: 'Executing query with invalid table name'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'SELECT * FROM non_existent_table'
         ])
@@ -198,12 +206,14 @@ class SqlExecutionTest extends Specification {
 
     def 'should handle invalid database configuration correctly'() {
         given:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: 'jdbc:h2:mem:test']]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Using non-existent database alias'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'non_existent_db',
             statement: 'SELECT 1'
         ])
@@ -212,7 +222,7 @@ class SqlExecutionTest extends Specification {
         thrown(IllegalArgumentException)
         
         when: 'Missing statement parameter'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test'
         ])
         
@@ -220,7 +230,7 @@ class SqlExecutionTest extends Specification {
         thrown(IllegalArgumentException)
         
         when: 'Empty statement parameter'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: ''
         ])
@@ -235,12 +245,14 @@ class SqlExecutionTest extends Specification {
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
-        Global.session = Mock(Session) {
+        def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
         }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
 
         when: 'Executing statement without semicolon'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'CREATE TABLE test_norm(id INT PRIMARY KEY)'
         ])
@@ -249,7 +261,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() > 0
         
         when: 'Executing statement with trailing whitespace'
-        ChannelSqlExtension.execute([
+        sqlExtension.execute([
             db: 'test',
             statement: 'DROP TABLE test_norm  '
         ])

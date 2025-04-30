@@ -30,6 +30,7 @@ import nextflow.Session
 import nextflow.extension.CH
 import nextflow.extension.DataflowHelper
 import nextflow.plugin.extension.Factory
+import nextflow.plugin.extension.Function
 import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.sql.config.SqlConfig
@@ -147,7 +148,8 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      *
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
      */
-    static void execute(Map params) {
+    @Function
+    void execute(Map params) {
         CheckHelper.checkParams('execute', params, EXECUTE_PARAMS)
         
         final String dbName = params.db as String ?: 'default'
@@ -156,7 +158,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         if (!statement)
             throw new IllegalArgumentException("Missing required parameter 'statement'")
             
-        final sqlConfig = new SqlConfig((Map) Global.session.config.navigate('sql.db'))
+        final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
         final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
         
         if (dataSource == null) {
@@ -187,7 +189,8 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
      * @return The number of rows affected by the SQL statement
      */
-    static int executeUpdate(Map params) {
+    @Function
+    int executeUpdate(Map params) {
         CheckHelper.checkParams('executeUpdate', params, EXECUTE_PARAMS)
         
         final String dbName = params.db as String ?: 'default'
@@ -196,7 +199,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         if (!statement)
             throw new IllegalArgumentException("Missing required parameter 'statement'")
             
-        final sqlConfig = new SqlConfig((Map) Global.session.config.navigate('sql.db'))
+        final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
         final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
         
         if (dataSource == null) {
