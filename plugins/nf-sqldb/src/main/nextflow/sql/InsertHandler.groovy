@@ -70,7 +70,12 @@ class InsertHandler implements Closeable {
         if( connection == null ) {
             connection = Sql.newInstance(ds.toMap()).getConnection()
             checkCreate(connection)
-            connection.setAutoCommit(false)
+            try {
+                connection.setAutoCommit(false)
+            }
+            catch(Exception e) {
+                log.debug "Database does not support setAutoCommit, continuing with default settings: ${e.message}"
+            }
         }
         return connection
     }
@@ -197,7 +202,12 @@ class InsertHandler implements Closeable {
                 // reset the current batch count
                 batchCount = 0
                 // make sure to commit the current batch
-                connection.commit()
+                try {
+                    connection.commit()
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
+                }
             }
         }
     }
@@ -238,7 +248,12 @@ class InsertHandler implements Closeable {
                 log.debug("[SQL] flushing and committing open batch")
                 preparedStatement.executeBatch()
                 preparedStatement.close()
-                connection.commit()
+                try {
+                    connection.commit()
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
+                }
             }
         }
         finally {
