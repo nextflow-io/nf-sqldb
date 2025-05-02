@@ -131,15 +131,15 @@ The following options are available:
 
 This plugin provides the following functions for executing SQL statements that don't return data, such as DDL (Data Definition Language) and DML (Data Manipulation Language) operations.
 
-### execute
+### sqlExecute
 
-The `execute` function executes a SQL statement that doesn't return a result set, such as `CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, or `DELETE` statements. For example:
+The `sqlExecute` function executes a SQL statement that doesn't return a result set, such as `CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, or `DELETE` statements. For example:
 
 ```nextflow
-include { execute } from 'plugin/nf-sqldb'
+include { sqlExecute } from 'plugin/nf-sqldb'
 
 // Create a table
-execute(
+sqlExecute(
     db: 'foo',
     statement: '''
         CREATE TABLE IF NOT EXISTS sample_table (
@@ -151,13 +151,13 @@ execute(
 )
 
 // Insert data
-execute(
+sqlExecute(
     db: 'foo',
     statement: "INSERT INTO sample_table (id, name, value) VALUES (1, 'alpha', 10.5)"
 )
 
 // Delete data
-execute(
+sqlExecute(
     db: 'foo',
     statement: "DELETE FROM sample_table WHERE id = 1"
 )
@@ -173,7 +173,7 @@ The following options are available:
 
 ### executeUpdate
 
-The `executeUpdate` function is similar to `execute`, but it returns the number of rows affected by the SQL statement. This is particularly useful for DML operations like `INSERT`, `UPDATE`, and `DELETE` where you need to know how many rows were affected. For example:
+The `executeUpdate` function is similar to `sqlExecute`, but it returns the number of rows affected by the SQL statement. This is particularly useful for DML operations like `INSERT`, `UPDATE`, and `DELETE` where you need to know how many rows were affected. For example:
 
 ```nextflow
 include { executeUpdate } from 'plugin/nf-sqldb'
@@ -216,8 +216,8 @@ The plugin provides two different ways to interact with databases:
    - `fromQuery`: Queries data from a database and returns a channel that emits the results.
    - `sqlInsert`: Takes data from a channel and inserts it into a database.
 
-2. **Execution Functions** (`execute` and `executeUpdate`): These are designed for direct SQL statement execution that doesn't require channel integration.
-   - `execute`: Executes a SQL statement without returning any data.
+2. **Execution Functions** (`sqlExecute` and `executeUpdate`): These are designed for direct SQL statement execution that doesn't require channel integration.
+   - `sqlExecute`: Executes a SQL statement without returning any data.
    - `executeUpdate`: Executes a SQL statement and returns the count of affected rows.
 
 Use **Dataflow Operators** when you need to:

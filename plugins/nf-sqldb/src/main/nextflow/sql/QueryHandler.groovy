@@ -52,11 +52,11 @@ class QueryHandler implements QueryOp<QueryHandler> {
         type_mapping.TINYINT = Byte
         type_mapping.SMALLINT = Short
         type_mapping.INTEGER = Integer
-        type_mapping.BIGINT	= Long
+        type_mapping.BIGINT    = Long
         type_mapping.REAL= Float
         type_mapping.FLOAT= Double
-        type_mapping.DOUBLE	= Double
-        type_mapping.BINARY	= byte[]
+        type_mapping.DOUBLE    = Double
+        type_mapping.BINARY    = byte[]
         type_mapping.VARBINARY = byte[]
         type_mapping.LONGVARBINARY= byte[]
         type_mapping.DATE = java.sql.Date
