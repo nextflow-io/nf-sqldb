@@ -1,13 +1,13 @@
 nextflow.enable.dsl=2
 
-include { fromQuery; sqlInsert; execute; executeUpdate } from 'plugin/nf-sqldb'
+include { fromQuery; sqlInsert; sqlExecute; executeUpdate } from 'plugin/nf-sqldb'
 
 workflow {
     // Setup: create table
-    execute(
+    sqlExecute(
         db: 'foo',
         statement: '''
-            CREATE TABLE IF NOT EXISTS sample_table (
+            CREATE TABLE IF NOT EXISTS testing (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR(100),
                 value DOUBLE

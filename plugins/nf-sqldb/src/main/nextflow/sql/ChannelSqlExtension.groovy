@@ -149,8 +149,8 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
      */
     @Function
-    void execute(Map params) {
-        CheckHelper.checkParams('execute', params, EXECUTE_PARAMS)
+    void sqlExecute(Map params) {
+        CheckHelper.checkParams('sqlExecute', params, EXECUTE_PARAMS)
         
         final String dbName = params.db as String ?: 'default'
         final String statement = params.statement as String

@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 
 /*
- * Example script demonstrating how to use the SQL execute and executeUpdate functions
+ * Example script demonstrating how to use the SQL sqlExecute and executeUpdate functions
  */
 
-include { execute; executeUpdate } from 'plugin/nf-sqldb'
+include { sqlExecute; executeUpdate } from 'plugin/nf-sqldb'
 include { fromQuery } from 'plugin/nf-sqldb'
 
 // Define database configuration in nextflow.config file

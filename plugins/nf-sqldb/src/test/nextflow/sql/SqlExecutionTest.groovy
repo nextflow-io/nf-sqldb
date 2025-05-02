@@ -53,7 +53,7 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Creating a table'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'CREATE TABLE test_table(id INT PRIMARY KEY, name VARCHAR(255))'
         ])
@@ -62,7 +62,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() > 0
         
         when: 'Altering the table'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'ALTER TABLE test_table ADD COLUMN description VARCHAR(255)'
         ])
@@ -71,7 +71,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'TEST_TABLE\' AND COLUMN_NAME = \'DESCRIPTION\'').size() > 0
         
         when: 'Dropping the table'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DROP TABLE test_table'
         ])
@@ -96,7 +96,7 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Inserting data'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INSERT INTO test_dml (id, name, value) VALUES (1, \'item1\', 100)'
         ])
@@ -106,7 +106,7 @@ class SqlExecutionTest extends Specification {
         sql.firstRow('SELECT * FROM test_dml WHERE id = 1').name == 'item1'
         
         when: 'Updating data'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'UPDATE test_dml SET value = 200 WHERE id = 1'
         ])
@@ -115,7 +115,7 @@ class SqlExecutionTest extends Specification {
         sql.firstRow('SELECT value FROM test_dml WHERE id = 1').value == 200
         
         when: 'Deleting data'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DELETE FROM test_dml WHERE id = 1'
         ])
@@ -186,7 +186,7 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Executing invalid SQL'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INVALID SQL STATEMENT'
         ])
@@ -195,7 +195,7 @@ class SqlExecutionTest extends Specification {
         thrown(Exception)
         
         when: 'Executing query with invalid table name'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'SELECT * FROM non_existent_table'
         ])
@@ -213,7 +213,7 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Using non-existent database alias'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'non_existent_db',
             statement: 'SELECT 1'
         ])
@@ -222,7 +222,7 @@ class SqlExecutionTest extends Specification {
         thrown(IllegalArgumentException)
         
         when: 'Missing statement parameter'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test'
         ])
         
@@ -230,7 +230,7 @@ class SqlExecutionTest extends Specification {
         thrown(IllegalArgumentException)
         
         when: 'Empty statement parameter'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: ''
         ])
@@ -252,7 +252,7 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Executing statement without semicolon'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'CREATE TABLE test_norm(id INT PRIMARY KEY)'
         ])
@@ -261,7 +261,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() > 0
         
         when: 'Executing statement with trailing whitespace'
-        sqlExtension.execute([
+        sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DROP TABLE test_norm  '
         ])
