@@ -24,7 +24,7 @@ import spock.lang.Specification
 import spock.lang.Timeout
 
 /**
- * Tests for the SQL execution functionality (execute and executeUpdate methods)
+ * Tests for the SQL execution functionality (sqlExecute method)
  * 
  * @author Seqera Labs
  */
@@ -40,7 +40,7 @@ class SqlExecutionTest extends Specification {
         Global.session = null
     }
 
-    def 'should execute DDL statements successfully'() {
+    def 'should execute DDL statements successfully and return null'() {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_ddl_' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -53,34 +53,37 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Creating a table'
-        sqlExtension.sqlExecute([
+        def createResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'CREATE TABLE test_table(id INT PRIMARY KEY, name VARCHAR(255))'
         ])
         
-        then: 'Table should be created'
+        then: 'Table should be created and result should be null'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() > 0
+        createResult == null
         
         when: 'Altering the table'
-        sqlExtension.sqlExecute([
+        def alterResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'ALTER TABLE test_table ADD COLUMN description VARCHAR(255)'
         ])
         
-        then: 'Column should be added'
+        then: 'Column should be added and result should be null'
         sql.rows('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'TEST_TABLE\' AND COLUMN_NAME = \'DESCRIPTION\'').size() > 0
+        alterResult == null
         
         when: 'Dropping the table'
-        sqlExtension.sqlExecute([
+        def dropResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DROP TABLE test_table'
         ])
         
-        then: 'Table should be dropped'
+        then: 'Table should be dropped and result should be null'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() == 0
+        dropResult == null
     }
 
-    def 'should execute DML statements successfully'() {
+    def 'should execute DML statements successfully and return affected row count'() {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_dml_' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -96,35 +99,38 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Inserting data'
-        sqlExtension.sqlExecute([
+        def insertResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INSERT INTO test_dml (id, name, value) VALUES (1, \'item1\', 100)'
         ])
         
-        then: 'Row should be inserted'
+        then: 'Row should be inserted and result should be 1'
         sql.rows('SELECT * FROM test_dml').size() == 1
         sql.firstRow('SELECT * FROM test_dml WHERE id = 1').name == 'item1'
+        insertResult == 1
         
         when: 'Updating data'
-        sqlExtension.sqlExecute([
+        def updateResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'UPDATE test_dml SET value = 200 WHERE id = 1'
         ])
         
-        then: 'Row should be updated'
+        then: 'Row should be updated and result should be 1'
         sql.firstRow('SELECT value FROM test_dml WHERE id = 1').value == 200
+        updateResult == 1
         
         when: 'Deleting data'
-        sqlExtension.sqlExecute([
+        def deleteResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DELETE FROM test_dml WHERE id = 1'
         ])
         
-        then: 'Row should be deleted'
+        then: 'Row should be deleted and result should be 1'
         sql.rows('SELECT * FROM test_dml').size() == 0
+        deleteResult == 1
     }
 
-    def 'should return affected row count with executeUpdate'() {
+    def 'should return correct affected row count for multiple row operations'() {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_update_' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -142,8 +148,8 @@ class SqlExecutionTest extends Specification {
         def sqlExtension = new ChannelSqlExtension()
         sqlExtension.init(session)
 
-        when: 'Inserting data with executeUpdate'
-        def insertCount = sqlExtension.executeUpdate([
+        when: 'Inserting data'
+        def insertCount = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INSERT INTO test_update (id, name, value) VALUES (4, \'item4\', 100)'
         ])
@@ -153,7 +159,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT * FROM test_update').size() == 4
         
         when: 'Updating multiple rows'
-        def updateCount = sqlExtension.executeUpdate([
+        def updateCount = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'UPDATE test_update SET value = 200 WHERE value = 100'
         ])
@@ -163,7 +169,7 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT * FROM test_update WHERE value = 200').size() == 4
         
         when: 'Deleting multiple rows'
-        def deleteCount = sqlExtension.executeUpdate([
+        def deleteCount = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DELETE FROM test_update WHERE value = 200'
         ])
@@ -252,21 +258,23 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Executing statement without semicolon'
-        sqlExtension.sqlExecute([
+        def result = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'CREATE TABLE test_norm(id INT PRIMARY KEY)'
         ])
         
-        then: 'Statement should be executed successfully'
+        then: 'Statement should be executed successfully and result should be null'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() > 0
+        result == null
         
         when: 'Executing statement with trailing whitespace'
-        sqlExtension.sqlExecute([
+        def dropResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DROP TABLE test_norm  '
         ])
         
-        then: 'Statement should be executed successfully'
+        then: 'Statement should be executed successfully and result should be null'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() == 0
+        dropResult == null
     }
 } 

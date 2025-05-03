@@ -1,10 +1,10 @@
 nextflow.enable.dsl=2
 
-include { fromQuery; sqlInsert; sqlExecute; executeUpdate } from 'plugin/nf-sqldb'
+include { fromQuery; sqlInsert; sqlExecute } from 'plugin/nf-sqldb'
 
 workflow {
-    // Setup: create table
-    sqlExecute(
+    // Setup: create table (DDL operation returns null)
+    def createResult = sqlExecute(
         db: 'foo',
         statement: '''
             CREATE TABLE IF NOT EXISTS testing (
@@ -14,6 +14,7 @@ workflow {
             )
         '''
     )
+    println "Create result: $createResult" // null
 
     // Insert data using sqlInsert
     Channel
@@ -28,8 +29,8 @@ workflow {
     fromQuery('SELECT * FROM sample_table', db: 'foo')
         .view()
 
-    // Update data using executeUpdate
-    def updated = executeUpdate(
+    // Update data using sqlExecute (DML operation returns affected row count)
+    def updated = sqlExecute(
         db: 'foo',
         statement: "UPDATE sample_table SET value = 30.5 WHERE name = 'beta'"
     )
