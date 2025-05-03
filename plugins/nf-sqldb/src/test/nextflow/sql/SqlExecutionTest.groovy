@@ -40,7 +40,7 @@ class SqlExecutionTest extends Specification {
         Global.session = null
     }
 
-    def 'should execute DDL statements successfully and return null'() {
+    def 'should execute DDL statements successfully and return success map'() {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_ddl_' + Random.newInstance().nextInt(1_000_000)
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -58,9 +58,10 @@ class SqlExecutionTest extends Specification {
             statement: 'CREATE TABLE test_table(id INT PRIMARY KEY, name VARCHAR(255))'
         ])
         
-        then: 'Table should be created and result should be null'
+        then: 'Table should be created and result should indicate success'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() > 0
-        createResult == null
+        createResult.success == true
+        createResult.result == null
         
         when: 'Altering the table'
         def alterResult = sqlExtension.sqlExecute([
@@ -68,9 +69,10 @@ class SqlExecutionTest extends Specification {
             statement: 'ALTER TABLE test_table ADD COLUMN description VARCHAR(255)'
         ])
         
-        then: 'Column should be added and result should be null'
+        then: 'Column should be added and result should indicate success'
         sql.rows('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'TEST_TABLE\' AND COLUMN_NAME = \'DESCRIPTION\'').size() > 0
-        alterResult == null
+        alterResult.success == true
+        alterResult.result == null
         
         when: 'Dropping the table'
         def dropResult = sqlExtension.sqlExecute([
@@ -78,9 +80,10 @@ class SqlExecutionTest extends Specification {
             statement: 'DROP TABLE test_table'
         ])
         
-        then: 'Table should be dropped and result should be null'
+        then: 'Table should be dropped and result should indicate success'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() == 0
-        dropResult == null
+        dropResult.success == true
+        dropResult.result == null
     }
 
     def 'should execute DML statements successfully and return affected row count'() {
@@ -104,10 +107,11 @@ class SqlExecutionTest extends Specification {
             statement: 'INSERT INTO test_dml (id, name, value) VALUES (1, \'item1\', 100)'
         ])
         
-        then: 'Row should be inserted and result should be 1'
+        then: 'Row should be inserted and result should indicate success with 1 row affected'
         sql.rows('SELECT * FROM test_dml').size() == 1
         sql.firstRow('SELECT * FROM test_dml WHERE id = 1').name == 'item1'
-        insertResult == 1
+        insertResult.success == true
+        insertResult.result == 1
         
         when: 'Updating data'
         def updateResult = sqlExtension.sqlExecute([
@@ -115,9 +119,10 @@ class SqlExecutionTest extends Specification {
             statement: 'UPDATE test_dml SET value = 200 WHERE id = 1'
         ])
         
-        then: 'Row should be updated and result should be 1'
+        then: 'Row should be updated and result should indicate success with 1 row affected'
         sql.firstRow('SELECT value FROM test_dml WHERE id = 1').value == 200
-        updateResult == 1
+        updateResult.success == true
+        updateResult.result == 1
         
         when: 'Deleting data'
         def deleteResult = sqlExtension.sqlExecute([
@@ -125,9 +130,10 @@ class SqlExecutionTest extends Specification {
             statement: 'DELETE FROM test_dml WHERE id = 1'
         ])
         
-        then: 'Row should be deleted and result should be 1'
+        then: 'Row should be deleted and result should indicate success with 1 row affected'
         sql.rows('SELECT * FROM test_dml').size() == 0
-        deleteResult == 1
+        deleteResult.success == true
+        deleteResult.result == 1
     }
 
     def 'should return correct affected row count for multiple row operations'() {
@@ -149,40 +155,42 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Inserting data'
-        def insertCount = sqlExtension.sqlExecute([
+        def insertResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INSERT INTO test_update (id, name, value) VALUES (4, \'item4\', 100)'
         ])
         
-        then: 'Should return 1 affected row'
-        insertCount == 1
+        then: 'Should return success with 1 affected row'
+        insertResult.success == true
+        insertResult.result == 1
         sql.rows('SELECT * FROM test_update').size() == 4
         
         when: 'Updating multiple rows'
-        def updateCount = sqlExtension.sqlExecute([
+        def updateResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'UPDATE test_update SET value = 200 WHERE value = 100'
         ])
         
-        then: 'Should return 4 affected rows'
-        updateCount == 4
+        then: 'Should return success with 4 affected rows'
+        updateResult.success == true
+        updateResult.result == 4
         sql.rows('SELECT * FROM test_update WHERE value = 200').size() == 4
         
         when: 'Deleting multiple rows'
-        def deleteCount = sqlExtension.sqlExecute([
+        def deleteResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'DELETE FROM test_update WHERE value = 200'
         ])
         
-        then: 'Should return 4 affected rows'
-        deleteCount == 4
+        then: 'Should return success with 4 affected rows'
+        deleteResult.success == true
+        deleteResult.result == 4
         sql.rows('SELECT * FROM test_update').size() == 0
     }
 
     def 'should handle invalid SQL correctly'() {
         given:
         def JDBC_URL = 'jdbc:h2:mem:test_error_' + Random.newInstance().nextInt(1_000_000)
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
         def session = Mock(Session) {
@@ -192,22 +200,24 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Executing invalid SQL'
-        sqlExtension.sqlExecute([
+        def invalidResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'INVALID SQL STATEMENT'
         ])
         
-        then: 'Should throw an exception'
-        thrown(Exception)
+        then: 'Should return failure with error message'
+        invalidResult.success == false
+        invalidResult.error != null
         
         when: 'Executing query with invalid table name'
-        sqlExtension.sqlExecute([
+        def noTableResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'SELECT * FROM non_existent_table'
         ])
         
-        then: 'Should throw an exception'
-        thrown(Exception)
+        then: 'Should return failure with error message'
+        noTableResult.success == false
+        noTableResult.error != null
     }
 
     def 'should handle invalid database configuration correctly'() {
@@ -219,30 +229,36 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Using non-existent database alias'
-        sqlExtension.sqlExecute([
+        def nonExistentDbResult = sqlExtension.sqlExecute([
             db: 'non_existent_db',
             statement: 'SELECT 1'
         ])
         
-        then: 'Should throw an IllegalArgumentException'
-        thrown(IllegalArgumentException)
+        then: 'Should return failure with error message'
+        nonExistentDbResult.success == false
+        nonExistentDbResult.error != null
+        nonExistentDbResult.error.contains('Unknown db name')
         
         when: 'Missing statement parameter'
-        sqlExtension.sqlExecute([
+        def missingStatementResult = sqlExtension.sqlExecute([
             db: 'test'
         ])
         
-        then: 'Should throw an IllegalArgumentException'
-        thrown(IllegalArgumentException)
+        then: 'Should return failure with error message'
+        missingStatementResult.success == false
+        missingStatementResult.error != null
+        missingStatementResult.error.contains('Missing required parameter')
         
         when: 'Empty statement parameter'
-        sqlExtension.sqlExecute([
+        def emptyStatementResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: ''
         ])
         
-        then: 'Should throw an IllegalArgumentException'
-        thrown(IllegalArgumentException)
+        then: 'Should return failure with error message'
+        emptyStatementResult.success == false
+        emptyStatementResult.error != null
+        emptyStatementResult.error.contains('Missing required parameter')
     }
 
     def 'should handle statement normalization correctly'() {
@@ -258,14 +274,15 @@ class SqlExecutionTest extends Specification {
         sqlExtension.init(session)
 
         when: 'Executing statement without semicolon'
-        def result = sqlExtension.sqlExecute([
+        def createResult = sqlExtension.sqlExecute([
             db: 'test',
             statement: 'CREATE TABLE test_norm(id INT PRIMARY KEY)'
         ])
         
-        then: 'Statement should be executed successfully and result should be null'
+        then: 'Statement should be executed successfully'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() > 0
-        result == null
+        createResult.success == true
+        createResult.result == null
         
         when: 'Executing statement with trailing whitespace'
         def dropResult = sqlExtension.sqlExecute([
@@ -273,8 +290,9 @@ class SqlExecutionTest extends Specification {
             statement: 'DROP TABLE test_norm  '
         ])
         
-        then: 'Statement should be executed successfully and result should be null'
+        then: 'Statement should be executed successfully'
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() == 0
-        dropResult == null
+        dropResult.success == true
+        dropResult.result == null
     }
 } 

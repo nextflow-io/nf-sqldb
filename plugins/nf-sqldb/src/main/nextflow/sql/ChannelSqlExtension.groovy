@@ -145,21 +145,21 @@ class ChannelSqlExtension extends PluginExtensionPoint {
 
     /**
      * Execute a SQL statement that does not return a result set (DDL/DML statements)
-     * For DML statements (INSERT, UPDATE, DELETE), it returns the number of affected rows
-     * For DDL statements (CREATE, ALTER, DROP), it returns null
+     * For DML statements (INSERT, UPDATE, DELETE), it returns a result map with success status and number of affected rows
+     * For DDL statements (CREATE, ALTER, DROP), it returns a result map with success status
      *
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
-     * @return The number of rows affected by the SQL statement for DML operations, null for DDL operations
+     * @return A map containing 'success' (boolean), 'result' (rows affected or null) and optionally 'error' (message)
      */
     @Function
-    Integer sqlExecute(Map params) {
+    Map sqlExecute(Map params) {
         CheckHelper.checkParams('sqlExecute', params, EXECUTE_PARAMS)
         
         final String dbName = params.db as String ?: 'default'
         final String statement = params.statement as String
         
         if (!statement)
-            throw new IllegalArgumentException("Missing required parameter 'statement'")
+            return [success: false, error: "Missing required parameter 'statement'"]
             
         final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
         final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
@@ -171,28 +171,27 @@ class ChannelSqlExtension extends PluginExtensionPoint {
                 msg += " - Did you mean: ${choices.get(0)}?"
             else if (choices)
                 msg += " - Did you mean any of these?\n" + choices.collect { "  $it" }.join('\n') + '\n'
-            throw new IllegalArgumentException(msg)
+            return [success: false, error: msg]
         }
         
         try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
             try (Statement stm = conn.createStatement()) {
                 String normalizedStatement = normalizeStatement(statement)
                 
-                // For DDL statements (CREATE, ALTER, DROP, etc.), execute() returns true if the first result is a ResultSet
-                // For DML statements (INSERT, UPDATE, DELETE), executeUpdate() returns the number of rows affected
                 boolean isDDL = normalizedStatement.trim().toLowerCase().matches("^(create|alter|drop|truncate).*")
                 
                 if (isDDL) {
                     stm.execute(normalizedStatement)
-                    return null
+                    return [success: true, result: null]
                 } else {
-                    return stm.executeUpdate(normalizedStatement)
+                    Integer rowsAffected = stm.executeUpdate(normalizedStatement)
+                    return [success: true, result: rowsAffected]
                 }
             }
         }
         catch (Exception e) {
             log.error("Error executing SQL statement: ${e.message}", e)
-            throw e
+            return [success: false, error: e.message]
         }
     }
 
@@ -204,7 +203,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      */
     private static String normalizeStatement(String statement) {
         if (!statement)
-            throw new IllegalArgumentException("Missing SQL statement")
+            return null
         def result = statement.trim()
         if (!result.endsWith(';'))
             result += ';'
