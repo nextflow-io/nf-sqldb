@@ -145,11 +145,14 @@ class ChannelSqlExtension extends PluginExtensionPoint {
 
     /**
      * Execute a SQL statement that does not return a result set (DDL/DML statements)
+     * For DML statements (INSERT, UPDATE, DELETE), it returns the number of affected rows
+     * For DDL statements (CREATE, ALTER, DROP), it returns null
      *
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
+     * @return The number of rows affected by the SQL statement for DML operations, null for DDL operations
      */
     @Function
-    void sqlExecute(Map params) {
+    Integer sqlExecute(Map params) {
         CheckHelper.checkParams('sqlExecute', params, EXECUTE_PARAMS)
         
         final String dbName = params.db as String ?: 'default'
@@ -173,7 +176,18 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         
         try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
             try (Statement stm = conn.createStatement()) {
-                stm.execute(normalizeStatement(statement))
+                String normalizedStatement = normalizeStatement(statement)
+                
+                // For DDL statements (CREATE, ALTER, DROP, etc.), execute() returns true if the first result is a ResultSet
+                // For DML statements (INSERT, UPDATE, DELETE), executeUpdate() returns the number of rows affected
+                boolean isDDL = normalizedStatement.trim().toLowerCase().matches("^(create|alter|drop|truncate).*")
+                
+                if (isDDL) {
+                    stm.execute(normalizedStatement)
+                    return null
+                } else {
+                    return stm.executeUpdate(normalizedStatement)
+                }
             }
         }
         catch (Exception e) {
@@ -182,47 +196,6 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         }
     }
 
-    /**
-     * Execute a SQL statement that does not return a result set (DDL/DML statements)
-     * and returns the number of affected rows
-     *
-     * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
-     * @return The number of rows affected by the SQL statement
-     */
-    @Function
-    int executeUpdate(Map params) {
-        CheckHelper.checkParams('executeUpdate', params, EXECUTE_PARAMS)
-        
-        final String dbName = params.db as String ?: 'default'
-        final String statement = params.statement as String
-        
-        if (!statement)
-            throw new IllegalArgumentException("Missing required parameter 'statement'")
-            
-        final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
-        final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
-        
-        if (dataSource == null) {
-            def msg = "Unknown db name: $dbName"
-            def choices = sqlConfig.getDataSourceNames().closest(dbName) ?: sqlConfig.getDataSourceNames()
-            if (choices?.size() == 1)
-                msg += " - Did you mean: ${choices.get(0)}?"
-            else if (choices)
-                msg += " - Did you mean any of these?\n" + choices.collect { "  $it" }.join('\n') + '\n'
-            throw new IllegalArgumentException(msg)
-        }
-        
-        try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
-            try (Statement stm = conn.createStatement()) {
-                return stm.executeUpdate(normalizeStatement(statement))
-            }
-        }
-        catch (Exception e) {
-            log.error("Error executing SQL update statement: ${e.message}", e)
-            throw e
-        }
-    }
-    
     /**
      * Normalizes a SQL statement by adding a semicolon if needed
      *

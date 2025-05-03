@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 
 /*
- * Example script demonstrating how to use the SQL sqlExecute and executeUpdate functions
+ * Example script demonstrating how to use the SQL sqlExecute function
  */
 
-include { sqlExecute; executeUpdate } from 'plugin/nf-sqldb'
+include { sqlExecute } from 'plugin/nf-sqldb'
 include { fromQuery } from 'plugin/nf-sqldb'
 
 // Define database configuration in nextflow.config file
@@ -13,13 +13,13 @@ include { fromQuery } from 'plugin/nf-sqldb'
 workflow {
     log.info """
     =========================================
-    SQL Execution Functions Example
+    SQL Execution Function Example
     =========================================
     """
 
-    // Step 1: Create a table
+    // Step 1: Create a table (DDL operation returns null)
     log.info "Creating a sample table..."
-    def createResult = executeUpdate(
+    def createResult = sqlExecute(
         db: 'demo',
         statement: '''
             CREATE TABLE IF NOT EXISTS TEST_TABLE (
@@ -31,9 +31,9 @@ workflow {
     )
     log.info "Create table result: $createResult"
 
-    // Step 2: Insert some data
+    // Step 2: Insert some data (DML operation returns affected row count)
     log.info "Inserting data..."
-    executeUpdate(
+    def insertCount = sqlExecute(
         db: 'demo',
         statement: '''
             INSERT INTO TEST_TABLE (ID, NAME, VALUE) VALUES
@@ -43,10 +43,11 @@ workflow {
             (4, 'delta', 40.9);
         '''
     )
+    log.info "Inserted $insertCount rows"
 
-    // Step 3: Update some data
+    // Step 3: Update some data (DML operation returns affected row count)
     log.info "Updating data..."
-    executeUpdate(
+    def updateCount = sqlExecute(
         db: 'demo',
         statement: '''
             UPDATE TEST_TABLE
@@ -54,16 +55,18 @@ workflow {
             WHERE ID = 2;
         '''
     )
+    log.info "Updated $updateCount rows"
 
-    // Step 4: Delete some data
+    // Step 4: Delete some data (DML operation returns affected row count)
     log.info "Deleting data..."
-    executeUpdate(
+    def deleteCount = sqlExecute(
         db: 'demo',
         statement: '''
             DELETE FROM TEST_TABLE
             WHERE ID = 4;
         '''
     )
+    log.info "Deleted $deleteCount rows"
 
     // Step 5: Query results
     log.info "Querying results..."
