@@ -3,7 +3,7 @@ nextflow.enable.dsl=2
 include { fromQuery; sqlInsert; sqlExecute } from 'plugin/nf-sqldb'
 
 workflow {
-    // Setup: create table (DDL operation returns null)
+    // Setup: create table (DDL operation)
     def createResult = sqlExecute(
         db: 'foo',
         statement: '''
@@ -14,7 +14,13 @@ workflow {
             )
         '''
     )
-    println "Create result: $createResult" // null
+    println "Create table success: ${createResult.success}" // Should be true
+    
+    // Handle potential failure
+    if (!createResult.success) {
+        println "Failed to create table: ${createResult.error}"
+        return
+    }
 
     // Insert data using sqlInsert
     Channel
@@ -29,10 +35,15 @@ workflow {
     fromQuery('SELECT * FROM sample_table', db: 'foo')
         .view()
 
-    // Update data using sqlExecute (DML operation returns affected row count)
-    def updated = sqlExecute(
+    // Update data using sqlExecute (DML operation returns affected row count in result field)
+    def updateResult = sqlExecute(
         db: 'foo',
         statement: "UPDATE sample_table SET value = 30.5 WHERE name = 'beta'"
     )
-    println "Updated $updated row(s)"
+    
+    if (updateResult.success) {
+        println "Updated ${updateResult.result} row(s)"
+    } else {
+        println "Update failed: ${updateResult.error}"
+    }
 } 
