@@ -240,9 +240,9 @@ Like all dataflow operators in Nextflow, the operators provided by this plugin a
 
 In particular, data inserted using the `sqlInsert` operator is _not_ guaranteed to be available to any subsequent queries using the `fromQuery` operator, as it is not possible to make a channel factory operation dependent on some upstream operation.
 
-## Developtment 
+## Development
 
-#### Publish artifacts to Maven repo 
+### Publish artifacts to Maven repo
 
 Use the following command: 
 

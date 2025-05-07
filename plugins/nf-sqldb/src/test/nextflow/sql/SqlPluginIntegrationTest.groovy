@@ -23,7 +23,7 @@ class SqlPluginIntegrationTest extends Specification {
         given:
         // Ensure test resources directory exists
         def testDir = Paths.get('plugins/nf-sqldb/src/testResources/testDir').toAbsolutePath()
-        def scriptPath = testDir.resolve('test_sql_db.nf')
+        def scriptPath = testDir.resolve('main.nf')
         def configPath = testDir.resolve('nextflow.config')
         
         // Check if required files exist
