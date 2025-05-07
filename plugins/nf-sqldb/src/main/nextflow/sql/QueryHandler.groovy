@@ -52,11 +52,11 @@ class QueryHandler implements QueryOp<QueryHandler> {
         type_mapping.TINYINT = Byte
         type_mapping.SMALLINT = Short
         type_mapping.INTEGER = Integer
-        type_mapping.BIGINT	= Long
+        type_mapping.BIGINT    = Long
         type_mapping.REAL= Float
         type_mapping.FLOAT= Double
-        type_mapping.DOUBLE	= Double
-        type_mapping.BINARY	= byte[]
+        type_mapping.DOUBLE    = Double
+        type_mapping.BINARY    = byte[]
         type_mapping.VARBINARY = byte[]
         type_mapping.LONGVARBINARY= byte[]
         type_mapping.DATE = java.sql.Date
@@ -156,8 +156,10 @@ class QueryHandler implements QueryOp<QueryHandler> {
     protected void query0(Connection conn) {
         try {
             try (Statement stm = conn.createStatement()) {
-                try( def rs = stm.executeQuery(normalize(statement)) ) {
-                    if( emitColumns )
+                final String normalizedStmt = normalize(statement)
+                // Execute the SQL query and get results
+                try (def rs = stm.executeQuery(normalizedStmt)) {
+                    if (emitColumns)
                         emitColumns(rs)
                     emitRowsAndClose(rs)
                 }

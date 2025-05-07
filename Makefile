@@ -1,4 +1,5 @@
 config ?= compileClasspath
+version ?= $(shell grep 'Plugin-Version' plugins/nf-sqldb/src/resources/META-INF/MANIFEST.MF | awk '{ print $$2 }')
 
 ifdef module 
 mm = :${module}:
@@ -69,3 +70,9 @@ upload-plugins:
 
 publish-index:
 	./gradlew plugins:publishIndex
+
+# Install the plugin into local nextflow plugins dir
+install:
+	./gradlew copyPluginZip
+	rm -rf ${HOME}/.nextflow/plugins/nf-sqldb-${version}
+	cp -r build/plugins/nf-sqldb-${version} ${HOME}/.nextflow/plugins/nf-sqldb-${version}
