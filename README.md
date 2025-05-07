@@ -132,14 +132,14 @@ This plugin provides the following function for executing SQL statements that do
 
 ### sqlExecute
 
-The `sqlExecute` function executes a SQL statement that doesn't return a result set, such as `CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, or `DELETE` statements. For DML statements (`INSERT`, `UPDATE`, `DELETE`), it returns the number of rows affected. For DDL statements (`CREATE`, `ALTER`, `DROP`), it returns `null`.
+The `sqlExecute` function executes a SQL statement that doesn't return a result set, such as `CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, or `DELETE` statements. For DML statements (`INSERT`, `UPDATE`, `DELETE`), it returns a Map with `success: true` and `result` set to the number of rows affected. For DDL statements (`CREATE`, `ALTER`, `DROP`), it returns a Map with `success: true` and `result: null`.
 
 For example:
 
 ```nextflow
 include { sqlExecute } from 'plugin/nf-sqldb'
 
-// Create a table (returns null for DDL operations)
+// Create a table (returns Map with result: null for DDL operations)
 def createResult = sqlExecute(
     db: 'foo',
     statement: '''
@@ -150,28 +150,28 @@ def createResult = sqlExecute(
         )
     '''
 )
-println "Create result: $createResult" // null
+println "Create result: $createResult" // [success: true, result: null]
 
-// Insert data (returns 1 for number of rows affected)
+// Insert data (returns Map with result: 1 for number of rows affected)
 def insertedRows = sqlExecute(
     db: 'foo',
     statement: "INSERT INTO sample_table (id, name, value) VALUES (1, 'alpha', 10.5)"
 )
-println "Inserted $insertedRows row(s)"
+println "Inserted $insertedRows.row(s)" // [success: true, result: 1]
 
-// Update data (returns number of rows updated)
+// Update data (returns Map with result: number of rows updated)
 def updatedRows = sqlExecute(
     db: 'foo',
     statement: "UPDATE sample_table SET value = 30.5 WHERE name = 'alpha'"
 )
-println "Updated $updatedRows row(s)"
+println "Updated $updatedRows.row(s)" // [success: true, result: <number>]
 
-// Delete data (returns number of rows deleted)
+// Delete data (returns Map with result: number of rows deleted)
 def deletedRows = sqlExecute(
     db: 'foo',
     statement: "DELETE FROM sample_table WHERE value > 25"
 )
-println "Deleted $deletedRows row(s)"
+println "Deleted $deletedRows.row(s)" // [success: true, result: <number>]
 ```
 
 The following options are available:
