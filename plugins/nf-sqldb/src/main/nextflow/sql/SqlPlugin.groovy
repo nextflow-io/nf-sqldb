@@ -31,5 +31,6 @@ class SqlPlugin extends BasePlugin {
 
     SqlPlugin(PluginWrapper wrapper) {
         super(wrapper)
+        System.setProperty("com.databricks.jdbc.loggerImpl","SLF4JLOGGER")
     }
 }

@@ -70,7 +70,15 @@ class InsertHandler implements Closeable {
         if( connection == null ) {
             connection = Sql.newInstance(ds.toMap()).getConnection()
             checkCreate(connection)
-            connection.setAutoCommit(false)
+            try {
+                connection.setAutoCommit(false)
+            }
+            catch(UnsupportedOperationException e) {
+                log.debug "setAutoCommit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+            }
+            catch(Exception e) {
+                log.debug "Database does not support setAutoCommit, continuing with default settings: ${e.message}"
+            }
         }
         return connection
     }
@@ -157,7 +165,15 @@ class InsertHandler implements Closeable {
             for(int i=0; i<columns.size(); i++ ) {
                 final col = columns[i]
                 final value = record.get(col)
-                stm.setObject(i+1, value)
+                try {
+                    stm.setObject(i+1, value)
+                }
+                catch(UnsupportedOperationException e) {
+                    log.debug "setObject is not supported by this driver (likely Databricks), skipping value: ${e.message}"
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support setObject, skipping value: ${e.message}"
+                }
             }
             // report a debug line
             log.debug "[SQL] perform sql statemet=$sql; entry=$record"
@@ -169,7 +185,15 @@ class InsertHandler implements Closeable {
             // loop over the tuple values and set a corresponding sql statement value
             for(int i=0; i<tuple.size(); i++ ) {
                 def value = tuple[i]
-                stm.setObject(i+1, value)
+                try {
+                    stm.setObject(i+1, value)
+                }
+                catch(UnsupportedOperationException e) {
+                    log.debug "setObject is not supported by this driver (likely Databricks), skipping value: ${e.message}"
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support setObject, skipping value: ${e.message}"
+                }
             }
             // report a debug line
             log.debug "[SQL] perform sql statemet=$sql; entry=$tuple"
@@ -197,7 +221,15 @@ class InsertHandler implements Closeable {
                 // reset the current batch count
                 batchCount = 0
                 // make sure to commit the current batch
-                connection.commit()
+                try {
+                    connection.commit()
+                }
+                catch(UnsupportedOperationException e) {
+                    log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
+                }
             }
         }
     }
@@ -236,9 +268,30 @@ class InsertHandler implements Closeable {
         try {
             if( preparedStatement && batchCount>0 ) {
                 log.debug("[SQL] flushing and committing open batch")
-                preparedStatement.executeBatch()
-                preparedStatement.close()
-                connection.commit()
+                try {
+                    preparedStatement.executeBatch()
+                }
+                catch(UnsupportedOperationException e) {
+                    log.debug "executeBatch is not supported by this driver (likely Databricks), continuing: ${e.message}"
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support executeBatch, continuing with default behavior: ${e.message}"
+                }
+                try {
+                    preparedStatement.close()
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support preparedStatement.close(), continuing: ${e.message}"
+                }
+                try {
+                    connection.commit()
+                }
+                catch(UnsupportedOperationException e) {
+                    log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+                }
+                catch(Exception e) {
+                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
+                }
             }
         }
         finally {
