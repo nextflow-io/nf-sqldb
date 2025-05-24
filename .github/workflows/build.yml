@@ -17,16 +17,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java_version: [11, 17]
+        java_version: [17, 21]
 
     steps:
       - name: Environment
         run: env | sort
 
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
           submodules: true
 
       - name: Setup Java ${{ matrix.java_version }}
