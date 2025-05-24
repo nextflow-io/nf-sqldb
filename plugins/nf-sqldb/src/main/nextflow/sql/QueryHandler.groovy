@@ -70,6 +70,7 @@ class QueryHandler implements QueryOp<QueryHandler> {
     private boolean emitColumns = false
     private Integer batchSize
     private long batchDelayMillis = 100
+    private boolean trailingSemicolon = true
     private int queryCount
 
     @Override
@@ -97,6 +98,8 @@ class QueryHandler implements QueryOp<QueryHandler> {
             this.batchSize = opts.batchSize as Integer
         if( opts.batchDelay )
             this.batchDelayMillis = opts.batchDelay as long
+        if( opts.trailingSemicolon )
+            this.trailingSemicolon = opts.trailingSemicolon as boolean
         return this
     }
 
@@ -127,7 +130,7 @@ class QueryHandler implements QueryOp<QueryHandler> {
         if( !q )
             throw new IllegalArgumentException("Missing query argument")
         def result = q.trim()
-        if( !result.endsWith(';') )
+        if( trailingSemicolon && !result.endsWith(';') )
             result += ';'
         return result
     }
