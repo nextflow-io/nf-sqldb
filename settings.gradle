@@ -13,6 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+plugins {
+    // required to download the toolchain (jdk) from a remote repository
+    // https://github.com/gradle/foojay-toolchains
+    // https://docs.gradle.org/current/userguide/toolchains.html#sub:download_repositories
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.7.0"
+}
 
 rootProject.name = 'nf-sqldb'
 include 'plugins'

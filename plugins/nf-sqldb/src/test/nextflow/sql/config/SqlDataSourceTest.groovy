@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022, Seqera Labs
+ * Copyright 2020-2025, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ class SqlDataSourceTest extends Specification {
                 password: 'secret']
         and:
         def ds = new SqlDataSource(config)
-        
+
         expect:
         ds.url == 'jdbc:xyz:host-name'
         ds.driver == 'this.that.Driver'

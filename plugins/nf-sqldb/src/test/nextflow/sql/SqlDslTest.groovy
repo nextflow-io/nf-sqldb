@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022, Seqera Labs
+ * Copyright 2020-2025, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 
 package nextflow.sql
 
+import java.nio.file.Files
+import java.util.jar.Manifest
+
 import groovy.sql.Sql
 import nextflow.Channel
 import nextflow.plugin.Plugins
@@ -24,10 +27,12 @@ import nextflow.plugin.TestPluginDescriptorFinder
 import nextflow.plugin.TestPluginManager
 import nextflow.plugin.extension.PluginExtensionProvider
 import org.pf4j.PluginDescriptorFinder
+import spock.lang.IgnoreIf
+import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Timeout
 import test.Dsl2Spec
-import test.MockScriptRunner
+import test.helpers.MockScriptRunner
 
 import java.nio.file.Path
 
@@ -61,10 +66,20 @@ abstract class SqlDslTest extends Dsl2Spec {
             @Override
             protected PluginDescriptorFinder createPluginDescriptorFinder() {
                 return new TestPluginDescriptorFinder(){
+
                     @Override
-                    protected Path getManifestPath(Path pluginPath) {
-                        return pluginPath.resolve('build/resources/main/META-INF/MANIFEST.MF')
+                    protected Manifest readManifestFromDirectory(Path pluginPath) {
+                        if( !Files.isDirectory(pluginPath) )
+                            return null
+
+                        final manifestPath = pluginPath.resolve('build/resources/main/META-INF/MANIFEST.MF')
+                        if( !Files.exists(manifestPath) )
+                            return null
+
+                        final input = Files.newInputStream(manifestPath)
+                        return new Manifest(input)
                     }
+
                 }
             }
         }
@@ -209,4 +224,31 @@ abstract class SqlDslTest extends Dsl2Spec {
         cleanup:
         sql.execute("drop table FOO")
     }
+
+    @Requires({System.getenv('NF_SQLDB_TEST_ATHENA_USERNAME')})
+    @Requires({System.getenv('NF_SQLDB_TEST_ATHENA_PASSWORD')})
+    @Requires({System.getenv('NF_SQLDB_TEST_ATHENA_REGION')})
+    @Requires({System.getenv('NF_SQLDB_ATHENA_TEST_S3_BUCKET')})
+    @IgnoreIf({ System.getenv('NXF_SMOKE') })
+    @Timeout(60)
+    def 'should perform a query for AWS Athena and create a channel'() {
+        given:
+        def userName = System.getenv('NF_SQLDB_TEST_ATHENA_USERNAME')
+        def password = System.getenv('NF_SQLDB_TEST_ATHENA_PASSWORD')
+        def region = System.getenv('NF_SQLDB_TEST_ATHENA_REGION')
+        def s3bucket = System.getenv('NF_SQLDB_ATHENA_TEST_S3_BUCKET')
+
+        def config = [sql: [db: [awsathena: [url: "jdbc:awsathena://AwsRegion=${region};S3OutputLocation=${s3bucket}", user: userName, password: password]]]]
+
+        when:
+        def SCRIPT = """
+            include { fromQuery } from 'plugin/nf-sqldb'
+            def sql = \"\"\"SELECT * FROM \"sra-glue-db\".metadata WHERE organism = 'Mycobacterium tuberculosis' AND bioproject = 'PRJNA670836' LIMIT 1;\"\"\"
+            channel.fromQuery(sql, db: "awsathena").view()
+            """
+        then:
+        new MockScriptRunner(config).setScript(SCRIPT).execute()
+
+    }
+
 }

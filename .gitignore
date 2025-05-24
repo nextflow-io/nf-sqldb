@@ -3,3 +3,4 @@
 .nextflow
 build
 dist
+out

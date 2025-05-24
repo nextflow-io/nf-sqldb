@@ -17,7 +17,6 @@
 plugins {
     id "java"
     id "io.nextflow.nf-build-plugin" version "1.0.1"
-    id "idea"
 }
 
 ext.github_organization = 'nextflow-io'
@@ -35,6 +34,12 @@ String computeSha512(File file) {
 
 String now() {
     "${java.time.OffsetDateTime.now().format(java.time.format.DateTimeFormatter.ISO_DATE_TIME)}"
+}
+
+List<String> allPlugins() {
+    def plugins = []
+    new File(rootProject.rootDir, 'plugins') .eachDir { if(it.name.startsWith('nf-')) plugins.add(it.name) }
+    return plugins
 }
 
 String metaFromManifest(String meta, File file) {
@@ -55,6 +60,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'groovy'
     apply plugin: 'io.nextflow.nf-build-plugin'
+    apply plugin: 'maven-publish'
 
     repositories {
         mavenLocal()
@@ -91,6 +97,8 @@ subprojects {
                 "sha512sum": "${computeSha512(zip)}"
               }
             """.stripIndent()
+            // cleanup tmp dir
+            file("$buildDir/tmp/makeZip").deleteDir()
         }
         outputs.file("$buildDir/libs/${project.name}-${project.version}.zip")
     }
@@ -134,10 +142,55 @@ subprojects {
         skipExisting = true
     }
 
+    jar {
+        from sourceSets.main.allSource
+        doLast {
+            file("$buildDir/tmp/jar").deleteDir()
+        }
+    }
+
+    tasks.withType(GenerateModuleMetadata) {
+        enabled = false
+    }
+    
+    task upload(dependsOn: [uploadPlugin] ) { }
+
+    /*
+     * publish jars maven repo on S3
+     */
+    ext.aws_access_key_id = project.findProperty('aws_access_key_id') ?: System.getenv('AWS_ACCESS_KEY_ID')
+    ext.aws_secret_access_key = project.findProperty('aws_secret_access_key') ?: System.getenv('AWS_SECRET_ACCESS_KEY')
+    ext.publishRepoUrl = project.findProperty('publish_repo_url') ?: System.getenv('PUBLISH_REPO_URL') ?: ( version.endsWith('-SNAPSHOT') ? "s3://maven.seqera.io/snapshots" : "s3://maven.seqera.io/releases" )
+
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                from components.java
+                suppressPomMetadataWarningsFor('testFixturesApiElements')
+                suppressPomMetadataWarningsFor('testFixturesRuntimeElements')
+            }
+        }
+        repositories {
+            maven {
+                url = publishRepoUrl
+                credentials(AwsCredentials) {
+                    // keys are defined in the `gradle.properties` file
+                    accessKey aws_access_key_id
+                    secretKey aws_secret_access_key
+                }
+            }
+        }
+    }
 }
 
+/*
+ * Upload all plugins to the corresponding GitHub repos
+ */
 task upload(dependsOn: [subprojects.uploadPlugin]) { }
 
+/*
+ * Copies the plugins required dependencies in the corresponding lib directory
+ */
 classes.dependsOn subprojects.copyPluginLibs
 
 /*
@@ -145,7 +198,7 @@ classes.dependsOn subprojects.copyPluginLibs
  */
 task publishIndex( type: io.nextflow.gradle.tasks.GithubRepositoryPublisher ) {
     indexUrl = 'https://github.com/nextflow-io/plugins/main/plugins.json'
-    repos = ['nf-sqldb']
+    repos = allPlugins()
     owner = github_organization
     githubUser = github_username
     githubEmail = github_commit_email
