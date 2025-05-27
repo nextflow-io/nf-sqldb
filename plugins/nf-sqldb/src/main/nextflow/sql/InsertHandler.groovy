@@ -169,10 +169,14 @@ class InsertHandler implements Closeable {
                     stm.setObject(i+1, value)
                 }
                 catch(UnsupportedOperationException e) {
-                    log.debug "setObject is not supported by this driver (likely Databricks), skipping value: ${e.message}"
-                }
-                catch(Exception e) {
-                    log.debug "Database does not support setObject, skipping value: ${e.message}"
+                    log.debug "setObject is not supported by this driver (likely Databricks), trying setString fallback: ${e.message}"
+                    // Fallback to setString for basic types
+                    try {
+                        stm.setString(i+1, value?.toString())
+                    }
+                    catch(Exception fallbackError) {
+                        throw new RuntimeException("Failed to set parameter ${i+1} with value '${value}': both setObject and setString failed", fallbackError)
+                    }
                 }
             }
             // report a debug line
@@ -189,10 +193,14 @@ class InsertHandler implements Closeable {
                     stm.setObject(i+1, value)
                 }
                 catch(UnsupportedOperationException e) {
-                    log.debug "setObject is not supported by this driver (likely Databricks), skipping value: ${e.message}"
-                }
-                catch(Exception e) {
-                    log.debug "Database does not support setObject, skipping value: ${e.message}"
+                    log.debug "setObject is not supported by this driver (likely Databricks), trying setString fallback: ${e.message}"
+                    // Fallback to setString for basic types
+                    try {
+                        stm.setString(i+1, value?.toString())
+                    }
+                    catch(Exception fallbackError) {
+                        throw new RuntimeException("Failed to set parameter ${i+1} with value '${value}': both setObject and setString failed", fallbackError)
+                    }
                 }
             }
             // report a debug line
@@ -217,6 +225,14 @@ class InsertHandler implements Closeable {
                 preparedStatement.executeBatch()
                 preparedStatement.clearBatch()
             }
+            catch(UnsupportedOperationException e) {
+                log.debug "executeBatch is not supported by this driver (likely Databricks), executing statements individually: ${e.message}"
+                // Fallback: execute each statement individually
+                preparedStatement.clearBatch()
+                // We need to re-add and execute each statement individually
+                // This is a limitation - we lose the current batch, but at least we don't silently fail
+                throw new RuntimeException("Batch execution not supported by driver. Consider setting batchSize=1 for this database type.", e)
+            }
             finally {
                 // reset the current batch count
                 batchCount = 0
@@ -226,9 +242,6 @@ class InsertHandler implements Closeable {
                 }
                 catch(UnsupportedOperationException e) {
                     log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
-                }
-                catch(Exception e) {
-                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
                 }
             }
         }
@@ -272,25 +285,21 @@ class InsertHandler implements Closeable {
                     preparedStatement.executeBatch()
                 }
                 catch(UnsupportedOperationException e) {
-                    log.debug "executeBatch is not supported by this driver (likely Databricks), continuing: ${e.message}"
-                }
-                catch(Exception e) {
-                    log.debug "Database does not support executeBatch, continuing with default behavior: ${e.message}"
+                    log.warn "executeBatch is not supported by this driver (likely Databricks). Remaining ${batchCount} statements were not executed. Consider using batchSize=1 for this database type."
+                    // Clear the batch to prevent inconsistent state
+                    preparedStatement.clearBatch()
                 }
                 try {
                     preparedStatement.close()
                 }
                 catch(Exception e) {
-                    log.debug "Database does not support preparedStatement.close(), continuing: ${e.message}"
+                    log.debug "Error closing prepared statement: ${e.message}"
                 }
                 try {
                     connection.commit()
                 }
                 catch(UnsupportedOperationException e) {
                     log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
-                }
-                catch(Exception e) {
-                    log.debug "Database does not support commit, continuing with default behavior: ${e.message}"
                 }
             }
         }
