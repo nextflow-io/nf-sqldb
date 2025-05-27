@@ -11,7 +11,7 @@ class DriverRegistry {
 
     Map<String, String> drivers = [:]
 
-    static DriverRegistry DEFAULT = new DriverRegistry()
+    static public DriverRegistry DEFAULT = new DriverRegistry()
 
     DriverRegistry(){
         initDefaultDrivers()

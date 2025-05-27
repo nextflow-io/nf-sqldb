@@ -1,9 +1,9 @@
 NF-SQLDB CHANGE-LOG
 ===================
-0.6.0 - 5 Nov 2024
+0.6.0 - 23 May 2025
 - Update build scripts
 - Remove nf-bigquery plugin
-- Bump Nextflow to version 24.04.0
+- Bump Nextflow to version 25.04.0
 - Bump mysql-connector-java:8.0.33
 - Bump mariadb-java-client:2.7.0
 - Bump postgresql:42.7.4
