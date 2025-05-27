@@ -66,19 +66,57 @@ class InsertHandler implements Closeable {
             throw new IllegalArgumentException("SQL batch option must be greater than zero: $batchSize")
     }
 
+    private void trySetObject(PreparedStatement stm, int index, Object value) {
+        try {
+            stm.setObject(index, value)
+        }
+        catch (UnsupportedOperationException e) {
+            log.debug "setObject is not supported by this driver (likely Databricks), trying setString fallback: ${e.message}"
+            stm.setString(index, value?.toString())
+        }
+    }
+
+    private void trySetAutoCommit(Connection connection, boolean value) {
+        try {
+            connection.setAutoCommit(value)
+        }
+        catch(UnsupportedOperationException e) {
+            log.debug "setAutoCommit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
+    private void tryCommit(Connection connection) {
+        try {
+            connection.commit()
+        }
+        catch(UnsupportedOperationException e) {
+            log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
+    private void tryClose(PreparedStatement stm) {
+        try {
+            stm.close()
+        }
+        catch(UnsupportedOperationException e) {
+            log.debug "PreparedStatement.close is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
+    private void tryClose(Connection connection) {
+        try {
+            connection.close()
+        }
+        catch(UnsupportedOperationException e) {
+            log.debug "Connection.close is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
     private Connection getConnection() {
         if( connection == null ) {
             connection = Sql.newInstance(ds.toMap()).getConnection()
             checkCreate(connection)
-            try {
-                connection.setAutoCommit(false)
-            }
-            catch(UnsupportedOperationException e) {
-                log.debug "setAutoCommit is not supported by this driver (likely Databricks), continuing: ${e.message}"
-            }
-            catch(Exception e) {
-                log.debug "Database does not support setAutoCommit, continuing with default settings: ${e.message}"
-            }
+            trySetAutoCommit(connection, false)
         }
         return connection
     }
@@ -165,19 +203,7 @@ class InsertHandler implements Closeable {
             for(int i=0; i<columns.size(); i++ ) {
                 final col = columns[i]
                 final value = record.get(col)
-                try {
-                    stm.setObject(i+1, value)
-                }
-                catch(UnsupportedOperationException e) {
-                    log.debug "setObject is not supported by this driver (likely Databricks), trying setString fallback: ${e.message}"
-                    // Fallback to setString for basic types
-                    try {
-                        stm.setString(i+1, value?.toString())
-                    }
-                    catch(Exception fallbackError) {
-                        throw new RuntimeException("Failed to set parameter ${i+1} with value '${value}': both setObject and setString failed", fallbackError)
-                    }
-                }
+                trySetObject(stm, i+1, value)
             }
             // report a debug line
             log.debug "[SQL] perform sql statemet=$sql; entry=$record"
@@ -189,19 +215,7 @@ class InsertHandler implements Closeable {
             // loop over the tuple values and set a corresponding sql statement value
             for(int i=0; i<tuple.size(); i++ ) {
                 def value = tuple[i]
-                try {
-                    stm.setObject(i+1, value)
-                }
-                catch(UnsupportedOperationException e) {
-                    log.debug "setObject is not supported by this driver (likely Databricks), trying setString fallback: ${e.message}"
-                    // Fallback to setString for basic types
-                    try {
-                        stm.setString(i+1, value?.toString())
-                    }
-                    catch(Exception fallbackError) {
-                        throw new RuntimeException("Failed to set parameter ${i+1} with value '${value}': both setObject and setString failed", fallbackError)
-                    }
-                }
+                trySetObject(stm, i+1, value)
             }
             // report a debug line
             log.debug "[SQL] perform sql statemet=$sql; entry=$tuple"
@@ -217,32 +231,32 @@ class InsertHandler implements Closeable {
         preparedStatement.clearParameters()
         // invoke the operation closure with setup the statement params
         operation.call(preparedStatement)
-        // add to current batch
-        preparedStatement.addBatch()
-        // if the batch size is reached, perform the batch statement
-        if( ++batchCount == batchSize ) {
+        // when the batchSize is one, execute directly (without adding to a batch)
+        if( batchSize==1 ) {
+            try {
+                preparedStatement.execute()
+            }
+            finally {
+                tryCommit(connection)
+            }
+        }
+        else {
+            // add to current batch
+            preparedStatement.addBatch()
+            // if the batch size is not reached, just return
+            if( ++batchCount < batchSize ) {
+                return
+            }
+            // otherwise, if the batch is full perform the batch statement
             try {
                 preparedStatement.executeBatch()
                 preparedStatement.clearBatch()
-            }
-            catch(UnsupportedOperationException e) {
-                log.debug "executeBatch is not supported by this driver (likely Databricks), executing statements individually: ${e.message}"
-                // Fallback: execute each statement individually
-                preparedStatement.clearBatch()
-                // We need to re-add and execute each statement individually
-                // This is a limitation - we lose the current batch, but at least we don't silently fail
-                throw new RuntimeException("Batch execution not supported by driver. Consider setting batchSize=1 for this database type.", e)
             }
             finally {
                 // reset the current batch count
                 batchCount = 0
                 // make sure to commit the current batch
-                try {
-                    connection.commit()
-                }
-                catch(UnsupportedOperationException e) {
-                    log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
-                }
+                connection.commit()
             }
         }
     }
@@ -281,32 +295,15 @@ class InsertHandler implements Closeable {
         try {
             if( preparedStatement && batchCount>0 ) {
                 log.debug("[SQL] flushing and committing open batch")
-                try {
-                    preparedStatement.executeBatch()
-                }
-                catch(UnsupportedOperationException e) {
-                    log.warn "executeBatch is not supported by this driver (likely Databricks). Remaining ${batchCount} statements were not executed. Consider using batchSize=1 for this database type."
-                    // Clear the batch to prevent inconsistent state
-                    preparedStatement.clearBatch()
-                }
-                try {
-                    preparedStatement.close()
-                }
-                catch(Exception e) {
-                    log.debug "Error closing prepared statement: ${e.message}"
-                }
-                try {
-                    connection.commit()
-                }
-                catch(UnsupportedOperationException e) {
-                    log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
-                }
+                preparedStatement.executeBatch()
+                tryClose(preparedStatement)
+                tryCommit(connection)
             }
         }
         finally {
             if( connection ) {
                 log.debug "[SQL] closing JDBC connection"
-                connection.close()
+                tryClose(connection)
             }
         }
     }
