@@ -24,16 +24,21 @@ import groovyx.gpars.dataflow.DataflowReadChannel
 import groovyx.gpars.dataflow.DataflowWriteChannel
 import groovyx.gpars.dataflow.expression.DataflowExpression
 import nextflow.Channel
+import nextflow.Global
 import nextflow.NF
 import nextflow.Session
 import nextflow.extension.CH
 import nextflow.extension.DataflowHelper
 import nextflow.plugin.extension.Factory
+import nextflow.plugin.extension.Function
 import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
+import java.sql.Connection
+import java.sql.Statement
+import groovy.sql.Sql
 /**
  * Provide a channel factory extension that allows the execution of Sql queries
  *
@@ -133,4 +138,75 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         return target
     }
 
+    private static final Map EXECUTE_PARAMS = [
+            db: CharSequence,
+            statement: CharSequence
+    ]
+
+    /**
+     * Execute a SQL statement that does not return a result set (DDL/DML statements)
+     * For DML statements (INSERT, UPDATE, DELETE), it returns a result map with success status and number of affected rows
+     * For DDL statements (CREATE, ALTER, DROP), it returns a result map with success status
+     *
+     * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
+     * @return A map containing 'success' (boolean), 'result' (rows affected or null) and optionally 'error' (message)
+     */
+    @Function
+    Map sqlExecute(Map params) {
+        CheckHelper.checkParams('sqlExecute', params, EXECUTE_PARAMS)
+        
+        final String dbName = params.db as String ?: 'default'
+        final String statement = params.statement as String
+        
+        if (!statement)
+            return [success: false, error: "Missing required parameter 'statement'"]
+            
+        final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
+        final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
+        
+        if (dataSource == null) {
+            def msg = "Unknown db name: $dbName"
+            def choices = sqlConfig.getDataSourceNames().closest(dbName) ?: sqlConfig.getDataSourceNames()
+            if (choices?.size() == 1)
+                msg += " - Did you mean: ${choices.get(0)}?"
+            else if (choices)
+                msg += " - Did you mean any of these?\n" + choices.collect { "  $it" }.join('\n') + '\n'
+            return [success: false, error: msg]
+        }
+        
+        try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
+            try (Statement stm = conn.createStatement()) {
+                String normalizedStatement = normalizeStatement(statement)
+                
+                boolean isDDL = normalizedStatement.trim().toLowerCase().matches("^(create|alter|drop|truncate).*")
+                
+                if (isDDL) {
+                    stm.execute(normalizedStatement)
+                    return [success: true, result: null]
+                } else {
+                    Integer rowsAffected = stm.executeUpdate(normalizedStatement)
+                    return [success: true, result: rowsAffected]
+                }
+            }
+        }
+        catch (Exception e) {
+            log.error("Error executing SQL statement: ${e.message}", e)
+            return [success: false, error: e.message]
+        }
+    }
+
+    /**
+     * Normalizes a SQL statement by adding a semicolon if needed
+     *
+     * @param statement The SQL statement to normalize
+     * @return The normalized SQL statement
+     */
+    private static String normalizeStatement(String statement) {
+        if (!statement)
+            return null
+        def result = statement.trim()
+        if (!result.endsWith(';'))
+            result += ';'
+        return result
+    }
 }
