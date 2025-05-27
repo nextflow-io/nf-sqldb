@@ -56,8 +56,6 @@ ext{
 }
 
 dependencies {
-    embeddedJar 'com.databricks:databricks-jdbc:0.9.8-oss'
-
     compileOnly "io.nextflow:nextflow:$nextflowVersion"
     compileOnly 'org.slf4j:slf4j-api:2.0.7'
     compileOnly 'org.pf4j:pf4j:3.12.0'
@@ -69,8 +67,6 @@ dependencies {
     api 'org.postgresql:postgresql:42.7.4'
     api 'org.xerial:sqlite-jdbc:3.47.0.0'
     api 'org.duckdb:duckdb_jdbc:0.10.2'
-
-    api files("$buildDir/filteredJars/databricks-jdbc-filtered-0.9.8-oss.jar")
 
     // JDBC driver setup for AWS Athena - the 3rd party JAR are being downloaded and setup as gradle tasks below.
     // Reference https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html
@@ -132,20 +128,5 @@ task copyAthenDep(dependsOn: unzipAthenDep, type: Copy) {
     from file(new File(buildDir, '/downloads/unzip/awsathena/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
     into "src/dist/lib"
 }
-
-// Task to create a filtered JAR
-task filteredJar(type: Jar) {
-    from {
-        zipTree(configurations.embeddedJar.singleFile).matching {
-            exclude 'org/slf4j/**' // Exclude SLF4J classes
-        }
-    }
-    archiveBaseName.set("databricks-jdbc-filtered")
-    archiveVersion.set("0.9.8-oss")
-    destinationDirectory.set(file("$buildDir/filteredJars"))
-}
-
 project.copyPluginLibs.dependsOn('copyAthenDep')
 project.compileGroovy.dependsOn('copyAthenDep')
-project.compileGroovy.dependsOn('filteredJar')
-project.copyPluginLibs.dependsOn('filteredJar')
