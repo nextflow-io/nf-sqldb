@@ -19,6 +19,7 @@ package nextflow.sql
 
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.sql.SQLFeatureNotSupportedException
 
 import groovy.sql.Sql
 import groovy.transform.CompileStatic
@@ -66,11 +67,29 @@ class InsertHandler implements Closeable {
             throw new IllegalArgumentException("SQL batch option must be greater than zero: $batchSize")
     }
 
+    private void safeSetAutoCommit(Connection connection, boolean value) {
+        try {
+            connection.setAutoCommit(value)
+        }
+        catch(SQLFeatureNotSupportedException e) {
+            log.debug "setAutoCommit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
+    private void safeCommit(Connection connection) {
+        try {
+            connection.commit()
+        }
+        catch(SQLFeatureNotSupportedException e) {
+            log.debug "commit is not supported by this driver (likely Databricks), continuing: ${e.message}"
+        }
+    }
+
     private Connection getConnection() {
         if( connection == null ) {
             connection = Sql.newInstance(ds.toMap()).getConnection()
             checkCreate(connection)
-            connection.setAutoCommit(false)
+            safeSetAutoCommit(connection, false)
         }
         return connection
     }
@@ -238,7 +257,7 @@ class InsertHandler implements Closeable {
                 log.debug("[SQL] flushing and committing open batch")
                 preparedStatement.executeBatch()
                 preparedStatement.close()
-                connection.commit()
+                safeCommit(connection)
             }
         }
         finally {
