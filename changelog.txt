@@ -1,5 +1,8 @@
 NF-SQLDB CHANGE-LOG
 ===================
+0.7.0 - 28 May 2025
+- Add sqlExecutor and other minor improvements [072ae039]
+
 0.6.0 - 23 May 2025
 - Update build scripts
 - Remove nf-bigquery plugin
