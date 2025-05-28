@@ -76,3 +76,7 @@ install:
 	./gradlew copyPluginZip
 	rm -rf ${HOME}/.nextflow/plugins/nf-sqldb-${version}
 	cp -r build/plugins/nf-sqldb-${version} ${HOME}/.nextflow/plugins/nf-sqldb-${version}
+
+
+publish-jar:
+	./gradlew plugins:nf-sqldb:publishMavenPublicationToMavenRepository
