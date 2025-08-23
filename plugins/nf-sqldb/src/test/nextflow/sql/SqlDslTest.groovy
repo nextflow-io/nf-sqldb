@@ -40,10 +40,19 @@ import java.nio.file.Path
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-@Timeout(120)
-class SqlDslTest extends Dsl2Spec {
+abstract class SqlDslTest extends Dsl2Spec {
 
     @Shared String pluginsMode
+
+    abstract String getJdbcURL()
+
+    abstract String getUsername()
+
+    abstract String getPasword()
+
+    Map getConfiguration(String jdbc){
+        [sql: [db: [ds1: [url: jdbc, user: username, password: pasword]]]]
+    }
 
     def setup() {
         // reset previous instances
@@ -84,41 +93,45 @@ class SqlDslTest extends Dsl2Spec {
     }
     def 'should perform a query and create a channel' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def JDBC_URL = getJdbcURL()
+        def sql = Sql.newInstance(JDBC_URL, getUsername(), getPasword())
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
         sql.execute("insert into FOO (id, alpha, omega) values (1, 'hola', 10) ")
         sql.execute("insert into FOO (id, alpha, omega) values (2, 'ciao', 20) ")
         sql.execute("insert into FOO (id, alpha, omega) values (3, 'hello', 30) ")
         and:
-        def config = [sql: [db: [test: [url: JDBC_URL]]]]
+        def config = getConfiguration(JDBC_URL)
 
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             def table = 'FOO'
             def sql = "select * from $table"
-            channel.fromQuery(sql, db: "test") 
+            channel.fromQuery(sql, db: "ds1") 
             '''
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+
         then:
         result.val == [1, 'hola', 10]
         result.val == [2, 'ciao', 20]
         result.val == [3, 'hello', 30]
         result.val == Channel.STOP
+
+        cleanup:
+        sql.execute("drop table FOO")
     }
 
 
     def 'should insert channel data into a db table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def JDBC_URL = getJdbcURL()
+        def sql = Sql.newInstance(JDBC_URL, getUsername(), getPasword())
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
         and:
-        def config = [sql: [db: [ds1: [url: JDBC_URL]]]]
+        def config= getConfiguration(JDBC_URL)
 
         when:
         def SCRIPT = '''
@@ -140,16 +153,18 @@ class SqlDslTest extends Dsl2Spec {
         rows.size() == 3
         rows.id == [100, 200, 300]
 
+        cleanup:
+        sql.execute("drop table FOO")
     }
 
     def 'should insert channel data into a db table in batches' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def JDBC_URL = getJdbcURL()
+        def sql = Sql.newInstance(JDBC_URL, getUsername(), getPasword())
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
         and:
-        def config = [sql: [db: [ds1: [url: JDBC_URL]]]]
+        def config = getConfiguration(JDBC_URL)
 
         when:
         def SCRIPT = '''
@@ -173,35 +188,41 @@ class SqlDslTest extends Dsl2Spec {
         rows.size() == 5
         rows.id == [100, 200, 300, 400, 500]
 
+        cleanup:
+        sql.execute("drop table FOO")
     }
 
     def 'should perform a query with headers and create a channel' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def JDBC_URL = getJdbcURL()
+        def sql = Sql.newInstance(JDBC_URL, getUsername(), getPasword())
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
         sql.execute("insert into FOO (id, alpha, omega) values (1, 'hola', 10) ")
         sql.execute("insert into FOO (id, alpha, omega) values (2, 'ciao', 20) ")
         sql.execute("insert into FOO (id, alpha, omega) values (3, 'hello', 30) ")
         and:
-        def config = [sql: [db: [test: [url: JDBC_URL]]]]
+        def config = getConfiguration(JDBC_URL)
 
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
             def table = 'FOO'
             def sql = "select * from $table"
-            channel.fromQuery(sql, db: "test", emitColumns:true) 
+            channel.fromQuery(sql, db: "ds1", emitColumns:true) 
             '''
         and:
         def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+
         then:
-        result.val == ['ID', 'ALPHA', 'OMEGA']
+        result.val*.toUpperCase() == ['ID', 'ALPHA', 'OMEGA']
         result.val == [1, 'hola', 10]
         result.val == [2, 'ciao', 20]
         result.val == [3, 'hello', 30]
         result.val == Channel.STOP
+
+        cleanup:
+        sql.execute("drop table FOO")
     }
 
     @Requires({System.getenv('NF_SQLDB_TEST_ATHENA_USERNAME')})
