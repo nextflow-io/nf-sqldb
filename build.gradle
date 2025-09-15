@@ -15,19 +15,12 @@
  */
 
 plugins {
-    // Apply the groovy plugin to add support for Groovy
-    id 'io.nextflow.groovy-library-conventions'
-    id 'idea'
+    id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.6'
     id 'de.undercouch.download' version '4.1.2'
 }
 
-group = 'io.nextflow'
-// DO NOT SET THE VERSION HERE
-// THE VERSION FOR PLUGINS IS DEFINED IN THE `/resources/META-INF/MANIFEST.NF` file
-
-idea {
-    module.inheritOutputDirs = true
-}
+// Plugin version (from latest MANIFEST.MF)
+version = '0.7.1'
 
 repositories {
     mavenCentral()
@@ -36,29 +29,8 @@ repositories {
     maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
 }
 
-configurations {
-    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sub:exclude_transitive_dependencies
-    runtimeClasspath.exclude group: 'org.slf4j', module: 'slf4j-api'
-}
-
-sourceSets {
-    main.java.srcDirs = []
-    main.groovy.srcDirs = ['src/main']
-    main.resources.srcDirs = ['src/resources']
-    test.groovy.srcDirs = ['src/test']
-    test.java.srcDirs = []
-    test.resources.srcDirs = []
-}
-
-ext{
-    nextflowVersion = '25.04.0'
-}
-
 dependencies {
-    compileOnly "io.nextflow:nextflow:$nextflowVersion"
-    compileOnly 'org.slf4j:slf4j-api:2.0.16'
-    compileOnly 'org.pf4j:pf4j:3.12.0'
-    
+    // Database dependencies
     api("org.apache.groovy:groovy-sql:4.0.26") { transitive = false }
     api 'com.h2database:h2:1.4.200'
     api 'mysql:mysql-connector-java:8.0.33'
@@ -73,29 +45,18 @@ dependencies {
 
     //NOTE: Had to remove the slf4j jar due to a conflict
     implementation fileTree(dir: 'src/dist/lib/libs', include: '*.jar')
-
-    // test configuration
-    testImplementation "org.apache.groovy:groovy:4.0.26"
-    testImplementation "org.apache.groovy:groovy-nio:4.0.26"
-    testImplementation "io.nextflow:nextflow:$nextflowVersion"
-    testImplementation ("org.apache.groovy:groovy-test:4.0.26") { exclude group: 'org.apache.groovy' }
-    testImplementation ("cglib:cglib-nodep:3.3.0")
-    testImplementation ("org.objenesis:objenesis:3.1")
-    testImplementation ("org.spockframework:spock-core:2.3-groovy-4.0") { exclude group: 'org.apache.groovy'; exclude group: 'net.bytebuddy' }
-    testImplementation ('org.spockframework:spock-junit4:2.3-groovy-4.0') { exclude group: 'org.apache.groovy'; exclude group: 'net.bytebuddy' }
-    testImplementation ('com.google.jimfs:jimfs:1.1')
-
-    testImplementation(testFixtures("io.nextflow:nextflow:$nextflowVersion"))
-    testImplementation(testFixtures("io.nextflow:nf-commons:$nextflowVersion"))
-
-    // see https://docs.gradle.org/4.1/userguide/dependency_management.html#sec:module_replacement
-    modules {
-        module("commons-logging:commons-logging") { replacedBy("org.slf4j:jcl-over-slf4j") }
-    }
 }
 
-test {
-    useJUnitPlatform()
+nextflowPlugin {
+    // Minimum Nextflow version
+    nextflowVersion = '25.04.0'
+
+    // Plugin metadata
+    provider = 'Seqera Labs'
+    className = 'nextflow.sql.SqlPlugin'
+    extensionPoints = [
+        'nextflow.sql.ChannelSqlExtension'
+    ]
 }
 
 /**
@@ -127,5 +88,11 @@ task copyAthenDep(dependsOn: unzipAthenDep, type: Copy) {
     from file(new File(buildDir, '/downloads/unzip/awsathena/SimbaAthenaJDBC-2.0.25.1001/AthenaJDBC42_2.0.25.1001.jar'))
     into "src/dist/lib"
 }
-project.copyPluginLibs.dependsOn('copyAthenDep')
-project.compileGroovy.dependsOn('copyAthenDep')
+
+// Hook into the new plugin's build process
+compileGroovy.dependsOn('copyAthenDep')
+
+// Configure the packagePlugin task to handle duplicates
+tasks.named('packagePlugin') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+} 
