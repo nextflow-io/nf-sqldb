@@ -156,6 +156,10 @@ class ChannelSqlExtensionTest extends Specification {
         given:
         def opA = { -> Mock(QueryOp) }
         def opB = { -> Mock(QueryOp) }
+        def logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ChannelSqlExtension)
+        def appender = new ch.qos.logback.core.read.ListAppender()
+        appender.start()
+        logger.addAppender(appender)
 
         when:
         ChannelSqlExtension.registerQueryOpProvider(opA)
@@ -163,6 +167,10 @@ class ChannelSqlExtensionTest extends Specification {
 
         then:
         noExceptionThrown()
+        appender.list.any { it.formattedMessage.contains('Overwriting an existing QueryOp provider') }
+
+        cleanup:
+        logger.detachAppender(appender)
     }
 
     def 'should unregister a provider that matches by identity' () {
