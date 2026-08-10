@@ -69,14 +69,49 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * Factory used to create the {@link QueryOp} instance backing the {@code fromQuery}
      * channel factory. Defaults to {@link QueryHandler}. A downstream plugin can supply
      * its own implementation via {@link #registerQueryOpProvider(groovy.lang.Closure)}.
+     * <p>
+     * Volatile because registration typically happens on the plugin-start thread while
+     * {@link #createQueryOp()} runs on DSL/operator threads; without this, readers are not
+     * guaranteed to ever observe a published provider.
+     * <p>
+     * <b>Limitations for downstream plugins:</b>
+     * <ul>
+     *     <li>The registering plugin must declare an actual dependency on {@code nf-sqldb}
+     *         so it shares this exact {@code ChannelSqlExtension} class. A shaded/bundled
+     *         copy of this class loaded by the plugin will register against its own copy
+     *         of this static field, and {@code fromQuery} will silently keep using the
+     *         default {@link QueryHandler}.</li>
+     *     <li>This static field pins a reference to the closure, and transitively to the
+     *         classloader of the plugin that registered it. A plugin that is stopped or
+     *         unloaded must call {@link #unregisterQueryOpProvider()} (or register
+     *         {@code null}); otherwise its classloader leaks and {@code fromQuery} keeps
+     *         dispatching into a provider backed by a dead plugin.</li>
+     * </ul>
      */
-    private static Closure<QueryOp> queryOpProvider
+    private static volatile Closure<QueryOp> queryOpProvider
 
     /**
-     * Register a custom {@link QueryOp} provider. Pass {@code null} to restore the default.
+     * Register a custom {@link QueryOp} provider. Pass {@code null} to restore the default,
+     * or call {@link #unregisterQueryOpProvider()} instead for a clearer call site.
+     * <p>
+     * If a different, non-null provider is already registered, it is overwritten and a
+     * warning is logged, since this usually indicates two plugins competing for the same
+     * hook.
      */
     static void registerQueryOpProvider(Closure<QueryOp> provider) {
+        final current = queryOpProvider
+        if( current!=null && provider!=null && current!=provider )
+            log.warn("Overwriting an existing QueryOp provider - this usually means two plugins are registering competing QueryOp providers")
         queryOpProvider = provider
+    }
+
+    /**
+     * Remove any previously registered {@link QueryOp} provider, restoring the default
+     * {@link QueryHandler} behavior. A plugin that registered a provider should call this
+     * when it is stopped or unloaded to avoid pinning its classloader.
+     */
+    static void unregisterQueryOpProvider() {
+        queryOpProvider = null
     }
 
     protected QueryOp createQueryOp() {

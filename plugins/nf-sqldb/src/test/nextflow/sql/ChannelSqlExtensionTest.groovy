@@ -126,15 +126,43 @@ class ChannelSqlExtensionTest extends Specification {
     }
 
     def cleanup() {
-        ChannelSqlExtension.registerQueryOpProvider(null)
+        ChannelSqlExtension.unregisterQueryOpProvider()
     }
 
     def 'should use default QueryHandler when no provider is registered' () {
         given:
-        def sqlExtension = new ChannelSqlExtension()
+        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        and:
+        sql.execute('create table FOO(id int primary key, alpha varchar(255));')
+        sql.execute("insert into FOO (id, alpha) values (1, 'hola') ")
+        and:
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
+        }
+        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
 
         expect:
         sqlExtension.createQueryOp() instanceof QueryHandler
+
+        when:
+        def result = sqlExtension.fromQuery('select * from FOO', db: 'test')
+        then:
+        result.val == [1, 'hola']
+        result.val == Channel.STOP
+    }
+
+    def 'should warn when overwriting a competing provider' () {
+        given:
+        def opA = { -> Mock(QueryOp) }
+        def opB = { -> Mock(QueryOp) }
+
+        when:
+        ChannelSqlExtension.registerQueryOpProvider(opA)
+        ChannelSqlExtension.registerQueryOpProvider(opB)
+
+        then:
+        noExceptionThrown()
     }
 
     def 'should use custom QueryOp when a provider is registered' () {
