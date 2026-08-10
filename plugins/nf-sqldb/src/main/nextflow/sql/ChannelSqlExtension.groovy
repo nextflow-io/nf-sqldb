@@ -65,6 +65,83 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             setup: CharSequence
     ]
 
+    /**
+     * Factory used to create the {@link QueryOp} instance backing the {@code fromQuery}
+     * channel factory. Defaults to {@link QueryHandler}. A downstream plugin can supply
+     * its own implementation via {@link #registerQueryOpProvider(groovy.lang.Closure)}.
+     * <p>
+     * Volatile because registration typically happens on the plugin-start thread while
+     * {@link #createQueryOp()} runs on DSL/operator threads; without this, readers are not
+     * guaranteed to ever observe a published provider.
+     */
+    private static volatile Closure<QueryOp> queryOpProvider
+
+    /**
+     * Register a custom {@link QueryOp} provider used by {@code fromQuery} in place of the
+     * default {@link QueryHandler}. Pass {@code null} to restore the default, or call
+     * {@link #unregisterQueryOpProvider(groovy.lang.Closure)} instead for a clearer call site.
+     * <p>
+     * If a different, non-null provider is already registered, it is overwritten and a
+     * warning is logged, since this usually indicates two plugins competing for the same
+     * hook.
+     * <p>
+     * <b>Prerequisites and limitations for callers:</b>
+     * <ul>
+     *     <li>The registering plugin must declare an actual dependency on {@code nf-sqldb}
+     *         so it shares this exact {@code ChannelSqlExtension} class. A shaded/bundled
+     *         copy of this class loaded by the plugin will register against its own copy
+     *         of this static field, and {@code fromQuery} will silently keep using the
+     *         default {@link QueryHandler}.</li>
+     *     <li>This static field pins a reference to the closure, and transitively to the
+     *         classloader of the plugin that registered it. A plugin that is stopped or
+     *         unloaded must call {@link #unregisterQueryOpProvider(groovy.lang.Closure)} (or
+     *         {@code null}); otherwise its classloader leaks and {@code fromQuery} keeps
+     *         dispatching into a provider backed by a dead plugin.</li>
+     *     <li>The {@code provider} closure is invoked with no arguments and has no access
+     *         to the current {@code session}, {@code opts}, or resolved {@code SqlDataSource}
+     *         — a provider that needs any of that state must capture it itself at
+     *         registration time.</li>
+     * </ul>
+     */
+    static synchronized void registerQueryOpProvider(Closure<QueryOp> provider) {
+        final current = queryOpProvider
+        if( current!=null && provider!=null && !current.is(provider) )
+            log.warn("Overwriting an existing QueryOp provider - this usually means two plugins are registering competing QueryOp providers")
+        queryOpProvider = provider
+    }
+
+    /**
+     * Remove a previously registered {@link QueryOp} provider, restoring the default
+     * {@link QueryHandler} behavior, but only if {@code provider} is still the currently
+     * registered one (identity match). A plugin that registered a provider should call
+     * this with the same closure when it is stopped or unloaded, to avoid pinning its
+     * classloader.
+     * <p>
+     * If a different provider is currently registered (e.g. another plugin has since
+     * overwritten it), the current registration is left untouched and a warning is
+     * logged, since clearing it would silently disable that other plugin's hook.
+     */
+    static synchronized void unregisterQueryOpProvider(Closure<QueryOp> provider) {
+        final current = queryOpProvider
+        if( current==null )
+            return
+        if( !current.is(provider) ) {
+            log.warn("Ignoring unregisterQueryOpProvider call - the currently registered QueryOp provider does not match the one being unregistered")
+            return
+        }
+        queryOpProvider = null
+    }
+
+    protected QueryOp createQueryOp() {
+        final provider = queryOpProvider
+        if( !provider )
+            return new QueryHandler()
+        final result = provider.call()
+        if( result==null )
+            throw new IllegalStateException("QueryOp provider returned a null instance")
+        return result
+    }
+
     private Session session
     private SqlConfig config
 
@@ -87,7 +164,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     protected DataflowWriteChannel queryToChannel(String query, Map opts) {
         final channel = CH.create()
         final dataSource = dataSourceFromOpts(opts)
-        final handler = new QueryHandler()
+        final handler = createQueryOp()
                 .withDataSource(dataSource)
                 .withStatement(query)
                 .withTarget(channel)

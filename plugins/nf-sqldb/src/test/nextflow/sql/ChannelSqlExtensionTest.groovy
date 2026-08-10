@@ -125,4 +125,115 @@ class ChannelSqlExtensionTest extends Specification {
         e.message.contains("Available databases:")
     }
 
+    def cleanup() {
+        ChannelSqlExtension.registerQueryOpProvider(null)
+    }
+
+    def 'should use default QueryHandler when no provider is registered' () {
+        given:
+        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        and:
+        sql.execute('create table FOO(id int primary key, alpha varchar(255));')
+        sql.execute("insert into FOO (id, alpha) values (1, 'hola') ")
+        and:
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
+        }
+        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
+
+        expect:
+        sqlExtension.createQueryOp() instanceof QueryHandler
+
+        when:
+        def result = sqlExtension.fromQuery('select * from FOO', db: 'test')
+        then:
+        result.val == [1, 'hola']
+        result.val == Channel.STOP
+    }
+
+    def 'should warn when overwriting a competing provider' () {
+        given:
+        def opA = { -> Mock(QueryOp) }
+        def opB = { -> Mock(QueryOp) }
+        def logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ChannelSqlExtension)
+        def appender = new ch.qos.logback.core.read.ListAppender()
+        appender.start()
+        logger.addAppender(appender)
+
+        when:
+        ChannelSqlExtension.registerQueryOpProvider(opA)
+        ChannelSqlExtension.registerQueryOpProvider(opB)
+
+        then:
+        noExceptionThrown()
+        appender.list.any { it.formattedMessage.contains('Overwriting an existing QueryOp provider') }
+
+        cleanup:
+        logger.detachAppender(appender)
+    }
+
+    def 'should unregister a provider that matches by identity' () {
+        given:
+        def customOp = Mock(QueryOp)
+        def provider = { -> customOp }
+        ChannelSqlExtension.registerQueryOpProvider(provider)
+
+        when:
+        ChannelSqlExtension.unregisterQueryOpProvider(provider)
+
+        then:
+        new ChannelSqlExtension().createQueryOp() instanceof QueryHandler
+    }
+
+    def 'should not unregister a provider that does not match by identity' () {
+        given:
+        def customOp = Mock(QueryOp) {
+            withDataSource(_) >> it
+            withStatement(_) >> it
+            withTarget(_) >> it
+            withOpts(_) >> it
+        }
+        def ownerProvider = { -> customOp }
+        def otherProvider = { -> Mock(QueryOp) }
+        ChannelSqlExtension.registerQueryOpProvider(ownerProvider)
+        and:
+        def logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ChannelSqlExtension)
+        def appender = new ch.qos.logback.core.read.ListAppender()
+        appender.start()
+        logger.addAppender(appender)
+
+        when:
+        ChannelSqlExtension.unregisterQueryOpProvider(otherProvider)
+
+        then:
+        new ChannelSqlExtension().createQueryOp().is(customOp)
+        appender.list.any { it.formattedMessage.contains('Ignoring unregisterQueryOpProvider call') }
+
+        cleanup:
+        logger.detachAppender(appender)
+    }
+
+    def 'should use custom QueryOp when a provider is registered' () {
+        given:
+        def customOp = Mock(QueryOp) {
+            withDataSource(_) >> it
+            withStatement(_) >> it
+            withTarget(_) >> it
+            withOpts(_) >> it
+        }
+        ChannelSqlExtension.registerQueryOpProvider({ -> customOp })
+        and:
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [default: [url: 'jdbc:h2:mem:custom_op_test']]]]
+        }
+        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
+
+        when:
+        sqlExtension.fromQuery('select * from FOO')
+
+        then:
+        1 * customOp.perform(true)
+    }
+
 }
