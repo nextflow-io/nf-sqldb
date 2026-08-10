@@ -23,7 +23,6 @@ import groovy.sql.Sql
 import groovyx.gpars.dataflow.DataflowQueue
 import nextflow.Channel
 import nextflow.sql.config.SqlDataSource
-import spock.lang.PendingFeature
 import spock.lang.Specification
 /**
  *
@@ -116,7 +115,6 @@ class QueryHandlerTest extends Specification {
         folder?.deleteDir()
     }
 
-    @PendingFeature(reason = 'a non-map properties value is silently ignored instead of rejected')
     def 'should reject a non-map properties setting' () {
         when:
         new SqlDataSource([url: 'jdbc:h2:mem:', properties: 'ssl=true'])
@@ -126,7 +124,6 @@ class QueryHandlerTest extends Specification {
         e.message.contains("must be a map of JDBC driver properties")
     }
 
-    @PendingFeature(reason = 'unresolved secrets in property values are not checked yet')
     def 'should reject an unresolved secret in a property value' () {
         when:
         new SqlDataSource([url: 'jdbc:h2:mem:', properties: [password: 'secrets.DB_PASSWORD']])

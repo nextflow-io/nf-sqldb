@@ -65,14 +65,21 @@ class SqlDataSource {
      *
      * @param value The `properties` config value
      * @return An immutable map of driver properties, or an empty map when not specified
+     * @throws IllegalArgumentException if the value is not a map
      */
     protected Map<String,String> resolveProperties(Object value) {
-        if( !(value instanceof Map) )
+        if( value == null )
             return Collections.<String,String>emptyMap()
+        if( !(value instanceof Map) )
+            throw new IllegalArgumentException(
+                    "Invalid 'properties' setting for the SQL data source -- " +
+                    "it must be a map of JDBC driver properties, offending value: '$value' [${value.getClass().getName()}]")
         final result = new LinkedHashMap<String,String>()
         for( Map.Entry entry : (value as Map) ) {
-            if( entry.value != null )
-                result.put(entry.key.toString(), entry.value.toString())
+            final key = entry.key.toString()
+            final val = resolveCredential(entry.value, "properties.$key".toString())
+            if( val != null )
+                result.put(key, val)
         }
         return Collections.unmodifiableMap(result)
     }
@@ -158,4 +165,3 @@ class SqlDataSource {
         return "SqlDataSource[url=$url; driver=$driver; user=$user; password=${Bolts.redact(password)}; properties=$redactedProps]"
     }
 }
-
