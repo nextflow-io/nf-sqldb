@@ -73,8 +73,19 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * Volatile because registration typically happens on the plugin-start thread while
      * {@link #createQueryOp()} runs on DSL/operator threads; without this, readers are not
      * guaranteed to ever observe a published provider.
+     */
+    private static volatile Closure<QueryOp> queryOpProvider
+
+    /**
+     * Register a custom {@link QueryOp} provider used by {@code fromQuery} in place of the
+     * default {@link QueryHandler}. Pass {@code null} to restore the default, or call
+     * {@link #unregisterQueryOpProvider()} instead for a clearer call site.
      * <p>
-     * <b>Limitations for downstream plugins:</b>
+     * If a different, non-null provider is already registered, it is overwritten and a
+     * warning is logged, since this usually indicates two plugins competing for the same
+     * hook.
+     * <p>
+     * <b>Prerequisites and limitations for callers:</b>
      * <ul>
      *     <li>The registering plugin must declare an actual dependency on {@code nf-sqldb}
      *         so it shares this exact {@code ChannelSqlExtension} class. A shaded/bundled
@@ -86,17 +97,11 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      *         unloaded must call {@link #unregisterQueryOpProvider()} (or register
      *         {@code null}); otherwise its classloader leaks and {@code fromQuery} keeps
      *         dispatching into a provider backed by a dead plugin.</li>
+     *     <li>The {@code provider} closure is invoked with no arguments and has no access
+     *         to the current {@code session}, {@code opts}, or resolved {@code SqlDataSource}
+     *         — a provider that needs any of that state must capture it itself at
+     *         registration time.</li>
      * </ul>
-     */
-    private static volatile Closure<QueryOp> queryOpProvider
-
-    /**
-     * Register a custom {@link QueryOp} provider. Pass {@code null} to restore the default,
-     * or call {@link #unregisterQueryOpProvider()} instead for a clearer call site.
-     * <p>
-     * If a different, non-null provider is already registered, it is overwritten and a
-     * warning is logged, since this usually indicates two plugins competing for the same
-     * hook.
      */
     static void registerQueryOpProvider(Closure<QueryOp> provider) {
         final current = queryOpProvider
