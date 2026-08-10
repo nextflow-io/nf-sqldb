@@ -57,6 +57,29 @@ The following options are available:
 `sql.db.'<DB-NAME>'.password`
 : The database connection password.
 
+`sql.db.'<DB-NAME>'.properties`
+: A map of additional JDBC driver connection properties, passed through verbatim to the
+  driver (optional). Use this for driver-specific settings that have no dedicated option,
+  for example SSL or session parameters. If `user` or `password` is also given at the top
+  level, it takes precedence over an entry of the same name in `properties`. Property
+  values are redacted from log and debug output.
+
+```
+sql {
+    db {
+        foo {
+            url = 'jdbc:mysql://localhost:3306/demo'
+            user = 'my-name'
+            password = 'my-password'
+            properties = [
+                sslMode: 'REQUIRED',
+                connectTimeout: '5000'
+            ]
+        }
+    }
+}
+```
+
 For information on using secrets with database credentials, see [docs/secrets.md](docs/secrets.md).
 
 ## Dataflow Operators

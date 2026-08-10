@@ -51,6 +51,89 @@ class QueryHandlerTest extends Specification {
         conn.close()
     }
 
+    def 'should pass configured properties to the jdbc driver' () {
+        given:
+        def ext = new QueryHandler()
+        and: 'a datasource with a driver property that changes observable H2 behaviour'
+        def JDBC_URL = 'jdbc:h2:mem:test_props_' + Random.newInstance().nextInt(1_000_000)
+        def ds = new SqlDataSource([url: JDBC_URL, properties: [IGNORECASE: 'TRUE']])
+
+        when:
+        def conn = ext.connect(ds)
+        and:
+        def stm = conn.createStatement()
+        stm.execute("create table FOO(id int primary key, alpha varchar(255))")
+        stm.execute("insert into FOO (id, alpha) values (1, 'HELLO')")
+        and: 'the query below only matches when the IGNORECASE property reached the driver'
+        def rs = stm.executeQuery("select * from FOO where alpha = 'hello'")
+
+        then:
+        rs.next()
+        rs.getString('alpha') == 'HELLO'
+
+        cleanup:
+        conn.close()
+    }
+
+    def 'should let top-level user win over same-named property' () {
+        given:
+        def ext = new QueryHandler()
+        and:
+        def JDBC_URL = 'jdbc:h2:mem:test_props_cred_' + Random.newInstance().nextInt(1_000_000)
+        def ds = new SqlDataSource([url: JDBC_URL, user: 'sa', properties: [user: 'bogus']])
+
+        when:
+        def conn = ext.connect(ds)
+
+        then: 'the effective connection user is the top-level one, not the property'
+        conn.metaData.userName.equalsIgnoreCase('sa')
+
+        cleanup:
+        conn?.close()
+    }
+
+    def 'should let top-level password win over same-named property' () {
+        given:
+        def ext = new QueryHandler()
+        and: 'a file-backed db pre-created with known credentials so a wrong password is rejected'
+        def folder = Files.createTempDirectory('test-pwd')
+        def JDBC_URL = "jdbc:h2:${folder.resolve('testdb')}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', 'right-pass', 'org.h2.Driver')
+        sql.execute('create table FOO(id int primary key)' as String)
+        sql.close()
+
+        when: 'the top-level password is correct but the property one is wrong'
+        def ds = new SqlDataSource([url: JDBC_URL, user: 'sa', password: 'right-pass', properties: [password: 'wrong-pass']])
+        def conn = ext.connect(ds)
+
+        then: 'the connection succeeds, proving the top-level password was used'
+        conn != null
+        conn.metaData.userName.equalsIgnoreCase('sa')
+
+        cleanup:
+        conn?.close()
+        folder?.deleteDir()
+    }
+
+    def 'should reject a non-map properties setting' () {
+        when:
+        new SqlDataSource([url: 'jdbc:h2:mem:', properties: 'ssl=true'])
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("must be a map of JDBC driver properties")
+    }
+
+    def 'should reject an unresolved secret in a property value' () {
+        when:
+        new SqlDataSource([url: 'jdbc:h2:mem:', properties: [password: 'secrets.DB_PASSWORD']])
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Unresolved secret detected')
+        e.message.contains('properties.password')
+    }
+
     def 'should perform query' () {
         given:
         def folder = Files.createTempDirectory('test')
