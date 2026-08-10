@@ -21,7 +21,6 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.SQLFeatureNotSupportedException
 
-import groovy.sql.Sql
 import groovy.transform.CompileStatic
 import groovy.transform.Memoized
 import groovy.transform.stc.ClosureParams
@@ -87,7 +86,7 @@ class InsertHandler implements Closeable {
 
     private Connection getConnection() {
         if( connection == null ) {
-            connection = Sql.newInstance(ds.toMap()).getConnection()
+            connection = ds.getConnection()
             checkCreate(connection)
             safeSetAutoCommit(connection, false)
         }

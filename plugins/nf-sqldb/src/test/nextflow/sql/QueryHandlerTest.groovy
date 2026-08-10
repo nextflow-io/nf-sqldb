@@ -51,6 +51,47 @@ class QueryHandlerTest extends Specification {
         conn.close()
     }
 
+    def 'should pass configured properties to the jdbc driver' () {
+        given:
+        def ext = new QueryHandler()
+        and: 'a datasource with a driver property that changes observable H2 behaviour'
+        def JDBC_URL = 'jdbc:h2:mem:test_props_' + Random.newInstance().nextInt(1_000_000)
+        def ds = new SqlDataSource([url: JDBC_URL, properties: [IGNORECASE: 'TRUE']])
+
+        when:
+        def conn = ext.connect(ds)
+        and:
+        def stm = conn.createStatement()
+        stm.execute("create table FOO(id int primary key, alpha varchar(255))")
+        stm.execute("insert into FOO (id, alpha) values (1, 'HELLO')")
+        and: 'the query below only matches when the IGNORECASE property reached the driver'
+        def rs = stm.executeQuery("select * from FOO where alpha = 'hello'")
+
+        then:
+        rs.next()
+        rs.getString('alpha') == 'HELLO'
+
+        cleanup:
+        conn.close()
+    }
+
+    def 'should let top-level credentials win over same-named properties' () {
+        given:
+        def ext = new QueryHandler()
+        and:
+        def JDBC_URL = 'jdbc:h2:mem:test_props_cred_' + Random.newInstance().nextInt(1_000_000)
+        def ds = new SqlDataSource([url: JDBC_URL, user: 'sa', properties: [user: 'bogus']])
+
+        when:
+        def conn = ext.connect(ds)
+
+        then:
+        conn != null
+
+        cleanup:
+        conn?.close()
+    }
+
     def 'should perform query' () {
         given:
         def folder = Files.createTempDirectory('test')

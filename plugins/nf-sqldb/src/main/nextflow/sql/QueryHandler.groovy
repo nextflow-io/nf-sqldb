@@ -23,7 +23,6 @@ import java.sql.ResultSet
 import java.sql.Statement
 import java.util.concurrent.CompletableFuture
 
-import groovy.sql.Sql
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import groovyx.gpars.dataflow.DataflowWriteChannel
@@ -120,7 +119,7 @@ class QueryHandler implements QueryOp<QueryHandler> {
 
     protected Connection connect(SqlDataSource ds) {
         log.debug "Creating SQL connection: ${ds}"
-        Sql.newInstance(ds.toMap()).getConnection()
+        ds.getConnection()
     }
 
     protected String normalize(String q) {
