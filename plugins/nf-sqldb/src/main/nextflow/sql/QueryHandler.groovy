@@ -72,6 +72,10 @@ class QueryHandler implements QueryOp<QueryHandler> {
     private long batchDelayMillis = 100
     private int queryCount
 
+    private final Object lock = new Object()
+    private Statement activeStatement
+    private boolean cancelRequested
+
     @Override
     QueryOp withStatement(String stm) {
         this.statement = stm
@@ -133,12 +137,77 @@ class QueryHandler implements QueryOp<QueryHandler> {
     }
 
     protected queryAsync(Connection conn) {
+        registerAbortHook()
         def future = CompletableFuture.runAsync ({ queryExec(conn) })
         future.exceptionally(this.&handlerException)
     }
 
-    static private void handlerException(Throwable e) {
+    private void registerAbortHook() {
+        final session = Global.session as Session
+        session?.onShutdown {
+            if( session.isAborted() )
+                cancel()
+        }
+    }
+
+    /**
+     * Cancel the statement currently executing this query, if any.
+     * Safe to call concurrently with query execution: if no statement
+     * is active yet, the cancellation is recorded and applied as soon
+     * as one is created. The actual driver {@code cancel()} call is made
+     * outside the lock so a stalling driver cannot block track/untrack,
+     * and any {@code SQLException} it raises (e.g. the statement was
+     * already closed by the time cancel runs) is logged, not propagated.
+     */
+    void cancel() {
+        Statement stm
+        synchronized (lock) {
+            cancelRequested = true
+            stm = activeStatement
+        }
+        if( stm == null )
+            return
+        try {
+            stm.cancel()
+        }
+        catch( java.sql.SQLException e ) {
+            log.debug "Unable to cancel in-flight SQL statement: ${e.message}"
+        }
+    }
+
+    private boolean isCancelled() {
+        synchronized (lock) {
+            return cancelRequested
+        }
+    }
+
+    /**
+     * Track the statement about to execute this query. Returns {@code true}
+     * if cancellation was already requested before the statement existed,
+     * in which case the caller must not execute it: a cancelled-but-idle
+     * JDBC statement is not guaranteed to interrupt a subsequent execute.
+     */
+    private boolean trackStatement(Statement stm) {
+        synchronized (lock) {
+            if( cancelRequested )
+                return true
+            activeStatement = stm
+            return false
+        }
+    }
+
+    private void untrackStatement() {
+        synchronized (lock) {
+            activeStatement = null
+        }
+    }
+
+    private void handlerException(Throwable e) {
         final error = e.cause ?: e
+        if( isCancelled() ) {
+            log.debug "SQL query cancelled: ${error.message}"
+            return
+        }
         log.error(error.message, error)
         final session = Global.session as Session
         session?.abort(error)
@@ -155,7 +224,12 @@ class QueryHandler implements QueryOp<QueryHandler> {
 
     protected void query0(Connection conn) {
         try {
-            try (Statement stm = conn.createStatement()) {
+            final Statement stm = conn.createStatement()
+            try {
+                if( trackStatement(stm) || isCancelled() ) {
+                    target.bind(Channel.STOP)
+                    return
+                }
                 final String normalizedStmt = normalize(statement)
                 // Execute the SQL query and get results
                 try (def rs = stm.executeQuery(normalizedStmt)) {
@@ -163,6 +237,10 @@ class QueryHandler implements QueryOp<QueryHandler> {
                         emitColumns(rs)
                     emitRowsAndClose(rs)
                 }
+            }
+            finally {
+                untrackStatement()
+                stm.close()
             }
         }
         finally {
@@ -175,26 +253,32 @@ class QueryHandler implements QueryOp<QueryHandler> {
             // create the query adding the `offset` and `limit` params
             final query = makePaginationStm(statement)
             // create the prepared statement
-            try (PreparedStatement stm = conn.prepareStatement(query)) {
-                int count = 0
-                int len = 0
-                do {
-                    final offset = (count++) * batchSize
-                    final limit = batchSize
+            final PreparedStatement stm = conn.prepareStatement(query)
+            try {
+                if( !trackStatement(stm) ) {
+                    int count = 0
+                    int len = 0
+                    while( count==0 || len==batchSize ) {
+                        final offset = (count++) * batchSize
+                        final limit = batchSize
 
-                    stm.setInt(1, limit)
-                    stm.setInt(2, offset)
-                    queryCount++
-                    try ( def rs = stm.executeQuery() ) {
-                        if( emitColumns && count==1 )
-                            emitColumns(rs)
-                        len = emitRows(rs)
-                        sleep(batchDelayMillis)
+                        stm.setInt(1, limit)
+                        stm.setInt(2, offset)
+                        if( isCancelled() )
+                            break
+                        queryCount++
+                        try ( def rs = stm.executeQuery() ) {
+                            if( emitColumns && count==1 )
+                                emitColumns(rs)
+                            len = emitRows(rs)
+                            sleep(batchDelayMillis)
+                        }
                     }
                 }
-                while( len==batchSize )
             }
             finally {
+                untrackStatement()
+                stm.close()
                 // close the channel
                 target.bind(Channel.STOP)
             }
