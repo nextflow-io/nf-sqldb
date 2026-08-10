@@ -57,6 +57,9 @@ The following options are available:
 `sql.db.'<DB-NAME>'.password`
 : The database connection password.
 
+`sql.db.'<DB-NAME>'.timeout`
+: Max time to wait when establishing a connection, e.g. `'10s'` (optional, no timeout by default).
+
 For information on using secrets with database credentials, see [docs/secrets.md](docs/secrets.md).
 
 ## Dataflow Operators
