@@ -23,6 +23,7 @@ import groovy.sql.Sql
 import groovyx.gpars.dataflow.DataflowQueue
 import nextflow.Channel
 import nextflow.sql.config.SqlDataSource
+import spock.lang.PendingFeature
 import spock.lang.Specification
 /**
  *
@@ -75,7 +76,7 @@ class QueryHandlerTest extends Specification {
         conn.close()
     }
 
-    def 'should let top-level credentials win over same-named properties' () {
+    def 'should let top-level user win over same-named property' () {
         given:
         def ext = new QueryHandler()
         and:
@@ -85,11 +86,55 @@ class QueryHandlerTest extends Specification {
         when:
         def conn = ext.connect(ds)
 
-        then:
-        conn != null
+        then: 'the effective connection user is the top-level one, not the property'
+        conn.metaData.userName.equalsIgnoreCase('sa')
 
         cleanup:
         conn?.close()
+    }
+
+    def 'should let top-level password win over same-named property' () {
+        given:
+        def ext = new QueryHandler()
+        and: 'a file-backed db pre-created with known credentials so a wrong password is rejected'
+        def folder = Files.createTempDirectory('test-pwd')
+        def JDBC_URL = "jdbc:h2:${folder.resolve('testdb')}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', 'right-pass', 'org.h2.Driver')
+        sql.execute('create table FOO(id int primary key)' as String)
+        sql.close()
+
+        when: 'the top-level password is correct but the property one is wrong'
+        def ds = new SqlDataSource([url: JDBC_URL, user: 'sa', password: 'right-pass', properties: [password: 'wrong-pass']])
+        def conn = ext.connect(ds)
+
+        then: 'the connection succeeds, proving the top-level password was used'
+        conn != null
+        conn.metaData.userName.equalsIgnoreCase('sa')
+
+        cleanup:
+        conn?.close()
+        folder?.deleteDir()
+    }
+
+    @PendingFeature(reason = 'a non-map properties value is silently ignored instead of rejected')
+    def 'should reject a non-map properties setting' () {
+        when:
+        new SqlDataSource([url: 'jdbc:h2:mem:', properties: 'ssl=true'])
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("must be a map of JDBC driver properties")
+    }
+
+    @PendingFeature(reason = 'unresolved secrets in property values are not checked yet')
+    def 'should reject an unresolved secret in a property value' () {
+        when:
+        new SqlDataSource([url: 'jdbc:h2:mem:', properties: [password: 'secrets.DB_PASSWORD']])
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Unresolved secret detected')
+        e.message.contains('properties.password')
     }
 
     def 'should perform query' () {
