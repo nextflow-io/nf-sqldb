@@ -65,6 +65,30 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             setup: CharSequence
     ]
 
+    /**
+     * Factory used to create the {@link QueryOp} instance backing the {@code fromQuery}
+     * channel factory. Defaults to {@link QueryHandler}. A downstream plugin can supply
+     * its own implementation via {@link #registerQueryOpProvider(groovy.lang.Closure)}.
+     */
+    private static Closure<QueryOp> queryOpProvider
+
+    /**
+     * Register a custom {@link QueryOp} provider. Pass {@code null} to restore the default.
+     */
+    static void registerQueryOpProvider(Closure<QueryOp> provider) {
+        queryOpProvider = provider
+    }
+
+    protected QueryOp createQueryOp() {
+        final provider = queryOpProvider
+        if( !provider )
+            return new QueryHandler()
+        final result = provider.call()
+        if( result==null )
+            throw new IllegalStateException("QueryOp provider returned a null instance")
+        return result
+    }
+
     private Session session
     private SqlConfig config
 
@@ -87,7 +111,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     protected DataflowWriteChannel queryToChannel(String query, Map opts) {
         final channel = CH.create()
         final dataSource = dataSourceFromOpts(opts)
-        final handler = new QueryHandler()
+        final handler = createQueryOp()
                 .withDataSource(dataSource)
                 .withStatement(query)
                 .withTarget(channel)

@@ -125,4 +125,38 @@ class ChannelSqlExtensionTest extends Specification {
         e.message.contains("Available databases:")
     }
 
+    def cleanup() {
+        ChannelSqlExtension.registerQueryOpProvider(null)
+    }
+
+    def 'should use default QueryHandler when no provider is registered' () {
+        given:
+        def sqlExtension = new ChannelSqlExtension()
+
+        expect:
+        sqlExtension.createQueryOp() instanceof QueryHandler
+    }
+
+    def 'should use custom QueryOp when a provider is registered' () {
+        given:
+        def customOp = Mock(QueryOp) {
+            withDataSource(_) >> it
+            withStatement(_) >> it
+            withTarget(_) >> it
+            withOpts(_) >> it
+        }
+        ChannelSqlExtension.registerQueryOpProvider({ -> customOp })
+        and:
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [default: [url: 'jdbc:h2:mem:custom_op_test']]]]
+        }
+        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
+
+        when:
+        sqlExtension.fromQuery('select * from FOO')
+
+        then:
+        1 * customOp.perform(true)
+    }
+
 }
