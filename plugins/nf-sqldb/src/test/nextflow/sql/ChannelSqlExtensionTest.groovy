@@ -126,7 +126,7 @@ class ChannelSqlExtensionTest extends Specification {
     }
 
     def cleanup() {
-        ChannelSqlExtension.unregisterQueryOpProvider()
+        ChannelSqlExtension.registerQueryOpProvider(null)
     }
 
     def 'should use default QueryHandler when no provider is registered' () {
@@ -163,6 +163,47 @@ class ChannelSqlExtensionTest extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    def 'should unregister a provider that matches by identity' () {
+        given:
+        def customOp = Mock(QueryOp)
+        def provider = { -> customOp }
+        ChannelSqlExtension.registerQueryOpProvider(provider)
+
+        when:
+        ChannelSqlExtension.unregisterQueryOpProvider(provider)
+
+        then:
+        new ChannelSqlExtension().createQueryOp() instanceof QueryHandler
+    }
+
+    def 'should not unregister a provider that does not match by identity' () {
+        given:
+        def customOp = Mock(QueryOp) {
+            withDataSource(_) >> it
+            withStatement(_) >> it
+            withTarget(_) >> it
+            withOpts(_) >> it
+        }
+        def ownerProvider = { -> customOp }
+        def otherProvider = { -> Mock(QueryOp) }
+        ChannelSqlExtension.registerQueryOpProvider(ownerProvider)
+        and:
+        def logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ChannelSqlExtension)
+        def appender = new ch.qos.logback.core.read.ListAppender()
+        appender.start()
+        logger.addAppender(appender)
+
+        when:
+        ChannelSqlExtension.unregisterQueryOpProvider(otherProvider)
+
+        then:
+        new ChannelSqlExtension().createQueryOp().is(customOp)
+        appender.list.any { it.formattedMessage.contains('Ignoring unregisterQueryOpProvider call') }
+
+        cleanup:
+        logger.detachAppender(appender)
     }
 
     def 'should use custom QueryOp when a provider is registered' () {

@@ -79,7 +79,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     /**
      * Register a custom {@link QueryOp} provider used by {@code fromQuery} in place of the
      * default {@link QueryHandler}. Pass {@code null} to restore the default, or call
-     * {@link #unregisterQueryOpProvider()} instead for a clearer call site.
+     * {@link #unregisterQueryOpProvider(groovy.lang.Closure)} instead for a clearer call site.
      * <p>
      * If a different, non-null provider is already registered, it is overwritten and a
      * warning is logged, since this usually indicates two plugins competing for the same
@@ -94,7 +94,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      *         default {@link QueryHandler}.</li>
      *     <li>This static field pins a reference to the closure, and transitively to the
      *         classloader of the plugin that registered it. A plugin that is stopped or
-     *         unloaded must call {@link #unregisterQueryOpProvider()} (or register
+     *         unloaded must call {@link #unregisterQueryOpProvider(groovy.lang.Closure)} (or
      *         {@code null}); otherwise its classloader leaks and {@code fromQuery} keeps
      *         dispatching into a provider backed by a dead plugin.</li>
      *     <li>The {@code provider} closure is invoked with no arguments and has no access
@@ -103,7 +103,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      *         registration time.</li>
      * </ul>
      */
-    static void registerQueryOpProvider(Closure<QueryOp> provider) {
+    static synchronized void registerQueryOpProvider(Closure<QueryOp> provider) {
         final current = queryOpProvider
         if( current!=null && provider!=null && current!=provider )
             log.warn("Overwriting an existing QueryOp provider - this usually means two plugins are registering competing QueryOp providers")
@@ -111,11 +111,24 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     }
 
     /**
-     * Remove any previously registered {@link QueryOp} provider, restoring the default
-     * {@link QueryHandler} behavior. A plugin that registered a provider should call this
-     * when it is stopped or unloaded to avoid pinning its classloader.
+     * Remove a previously registered {@link QueryOp} provider, restoring the default
+     * {@link QueryHandler} behavior, but only if {@code provider} is still the currently
+     * registered one (identity match). A plugin that registered a provider should call
+     * this with the same closure when it is stopped or unloaded, to avoid pinning its
+     * classloader.
+     * <p>
+     * If a different provider is currently registered (e.g. another plugin has since
+     * overwritten it), the current registration is left untouched and a warning is
+     * logged, since clearing it would silently disable that other plugin's hook.
      */
-    static void unregisterQueryOpProvider() {
+    static synchronized void unregisterQueryOpProvider(Closure<QueryOp> provider) {
+        final current = queryOpProvider
+        if( current==null )
+            return
+        if( current!=provider ) {
+            log.warn("Ignoring unregisterQueryOpProvider call - the currently registered QueryOp provider does not match the one being unregistered")
+            return
+        }
         queryOpProvider = null
     }
 
