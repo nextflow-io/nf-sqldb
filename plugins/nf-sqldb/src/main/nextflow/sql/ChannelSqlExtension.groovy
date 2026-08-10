@@ -105,7 +105,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      */
     static synchronized void registerQueryOpProvider(Closure<QueryOp> provider) {
         final current = queryOpProvider
-        if( current!=null && provider!=null && current!=provider )
+        if( current!=null && provider!=null && !current.is(provider) )
             log.warn("Overwriting an existing QueryOp provider - this usually means two plugins are registering competing QueryOp providers")
         queryOpProvider = provider
     }
@@ -125,7 +125,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         final current = queryOpProvider
         if( current==null )
             return
-        if( current!=provider ) {
+        if( !current.is(provider) ) {
             log.warn("Ignoring unregisterQueryOpProvider call - the currently registered QueryOp provider does not match the one being unregistered")
             return
         }
