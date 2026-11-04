@@ -1,0 +1,52 @@
+name: NF-SQLDB CI test
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+jobs:
+  build:
+    name: Build nf-sqldb
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        java_version: [17, 21]
+
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ratchet:actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Java ${{ matrix.java_version }}
+        uses: actions/setup-java@0f62d2ad8407a414cddd4790bed06fd9ebda0f56 # ratchet:actions/setup-java@v1
+        with:
+          java-version: ${{matrix.java_version}}
+          architecture: x64
+
+      - name: Compile
+        run: ./gradlew assemble
+
+      - name: Tests
+        run: ./gradlew check
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+          NXF_SMOKE: 1
+
+      - name: Publish
+        if: failure()
+        run: bash pub-tests.sh github
+        env:
+          TEST_JDK: ${{ matrix.java_version }}
+          NXF_AWS_ACCESS: ${{ secrets.NXF_AWS_ACCESS }}
+          NXF_AWS_SECRET: ${{ secrets.NXF_AWS_SECRET }}

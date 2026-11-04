@@ -1,0 +1,6 @@
+.gradle
+.idea
+.nextflow
+build
+dist
+out
