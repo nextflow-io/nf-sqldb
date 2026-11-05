@@ -18,7 +18,9 @@
 package nextflow.sql
 
 import java.sql.Connection
+import java.sql.DatabaseMetaData
 import java.sql.PreparedStatement
+import java.sql.SQLException
 import java.sql.SQLFeatureNotSupportedException
 
 import groovy.sql.Sql
@@ -174,8 +176,7 @@ class InsertHandler implements Closeable {
         executeStm(sql) {stm ->
             // loop over the expected columns and fetch a corresponding record value to be inserted
             for(int i=0; i<columns.size(); i++ ) {
-                final col = columns[i]
-                final value = record.get(col)
+                final value = getIgnoreCase(record, columns[i])
                 stm.setObject(i+1, value)
             }
             // report a debug line
@@ -223,32 +224,65 @@ class InsertHandler implements Closeable {
 
     @Memoized
     protected List<String> fetchColNames0(String tableName) {
-        final conn = getConnection()
-        final metaData  = conn.getMetaData()
-        final resultSet = metaData.getColumns(null, null, tableName, null);
-
-        final result = [] as List<String>
-        while (resultSet.next()){
-            result.add( resultSet.getString("COLUMN_NAME") )
+        final metaData = getConnection().getMetaData()
+        for( String name : tableNameCandidates(metaData, tableName) ) {
+            final result = queryColNames(metaData, name)
+            if( result )
+                return result
         }
+        return []
+    }
 
+    private static List<String> queryColNames(DatabaseMetaData metaData, String tableName) {
+        final result = [] as List<String>
+        try( final resultSet = metaData.getColumns(null, null, tableName, null) ) {
+            while( resultSet.next() )
+                result.add( resultSet.getString("COLUMN_NAME") )
+        }
+        return result
+    }
+
+    /**
+     * Get the table names to look up in the database metadata, i.e. the name
+     * folded to the identifier case used by the database (since unquoted
+     * identifiers are case-insensitive), followed by the name as given.
+     */
+    protected static Collection<String> tableNameCandidates(DatabaseMetaData metaData, String tableName) {
+        final result = new LinkedHashSet<String>()
+        try {
+            if( metaData.storesUpperCaseIdentifiers() )
+                result.add(tableName.toUpperCase())
+            else if( metaData.storesLowerCaseIdentifiers() )
+                result.add(tableName.toLowerCase())
+        }
+        catch( SQLException | UnsupportedOperationException e ) {
+            log.debug "[SQL] unable to determine identifier case for this database: ${e.message}"
+        }
+        result.add(tableName)
         return result
     }
 
     protected List<String> fetchColNames1(String tableName, Map<String,Object> record) {
-        final keys = record.keySet().collect(it -> it.toUpperCase())
+        final keys = record.keySet().collect(it -> it.toLowerCase()) as Set<String>
         final allCols = fetchColNames0(tableName)
-        final result = new ArrayList(allCols.size())
-        // return only DB columns that belongs map keys
-        for( String it : allCols ) {
-            if( it in keys )
-                result.add(it)
-        }
+        // return only DB columns that match the map keys (case-insensitive)
+        final result = allCols.findAll(it -> it.toLowerCase() in keys)
         // check if the record contains fields not mapped to table columns
-        final diff = keys - result
+        final found = result.collect(it -> it.toLowerCase()) as Set<String>
+        final diff = record.keySet().findAll(it -> !(it.toLowerCase() in found))
         if( diff )
             throw new IllegalArgumentException("Unknown columns for table '$into': ${diff.join(',')} - Offending record: $record")
         return result
+    }
+
+    private static Object getIgnoreCase(Map record, String key) {
+        if( record.containsKey(key) )
+            return record.get(key)
+        for( Map.Entry entry : (Set<Map.Entry>)record.entrySet() ) {
+            if( key.equalsIgnoreCase(entry.key as String) )
+                return entry.value
+        }
+        return null
     }
 
     void close() {

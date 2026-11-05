@@ -133,4 +133,79 @@ class InsertHandlerTest extends Specification {
         result.alpha == ['Hola', 'Ciao', 'Hello']
     }
 
+    def 'should insert map with inferred columns ignoring case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}${OPTS}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255), omega int)')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([alpha: 'Hola', ID: 1])
+        handler.perform([alpha: 'Ciao', ID: 2])
+        handler.close()
+        then:
+        handler.getSqlStatement([:]) == "insert into $TABLE ( $COLS ) values ( ?,? )"
+        and:
+        def result = sql.rows('select * from foo order by id')
+        result.id == [1, 2]
+        result.alpha == ['Hola', 'Ciao']
+        result.omega == [null, null]
+
+        cleanup:
+        sql?.close()
+
+        where:
+        OPTS                       | TABLE | COLS
+        ''                         | 'foo' | 'ID,ALPHA'
+        ''                         | 'FOO' | 'ID,ALPHA'
+        ';DATABASE_TO_LOWER=TRUE'  | 'foo' | 'id,alpha'
+        ';DATABASE_TO_LOWER=TRUE'  | 'FOO' | 'id,alpha'
+    }
+
+    def 'should insert tuple with inferred columns ignoring table case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}${OPTS}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([1, 'Hola'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $TABLE ( $COLS ) values ( ?,? )"
+        sql.rows('select * from foo').id == [1]
+
+        cleanup:
+        sql?.close()
+
+        where:
+        OPTS                       | TABLE | COLS
+        ''                         | 'foo' | 'ID,ALPHA'
+        ';DATABASE_TO_LOWER=TRUE'  | 'foo' | 'id,alpha'
+        ';DATABASE_TO_LOWER=TRUE'  | 'FOO' | 'id,alpha'
+    }
+
+    def 'should report unknown map columns' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform([id: 1, Beta: 'x'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'foo': Beta")
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
 }
