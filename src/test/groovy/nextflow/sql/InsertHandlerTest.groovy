@@ -88,6 +88,7 @@ class InsertHandlerTest extends Specification {
         result.omega == [100,200,300]
 
         cleanup:
+        handler?.close()
         sql?.close()
     }
 
@@ -114,6 +115,7 @@ class InsertHandlerTest extends Specification {
         result.id == [1,2,3]
 
         cleanup:
+        handler?.close()
         sql?.close()
     }
 
@@ -141,6 +143,7 @@ class InsertHandlerTest extends Specification {
         result.alpha == ['Hola', 'Ciao', 'Hello']
 
         cleanup:
+        handler?.close()
         sql?.close()
     }
 
@@ -165,6 +168,7 @@ class InsertHandlerTest extends Specification {
         result.omega == [null, null]
 
         cleanup:
+        handler?.close()
         sql?.close()
 
         where:
@@ -191,6 +195,7 @@ class InsertHandlerTest extends Specification {
         sql.rows('select * from foo').id == [1]
 
         cleanup:
+        handler?.close()
         sql?.close()
 
         where:

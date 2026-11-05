@@ -290,6 +290,7 @@ class InsertHandler implements Closeable {
             if( preparedStatement && batchCount>0 ) {
                 log.debug("[SQL] flushing and committing open batch")
                 preparedStatement.executeBatch()
+                batchCount = 0
                 preparedStatement.close()
                 safeCommit(connection)
             }
@@ -298,6 +299,7 @@ class InsertHandler implements Closeable {
             if( connection ) {
                 log.debug "[SQL] closing JDBC connection"
                 connection.close()
+                connection = null
             }
         }
     }
