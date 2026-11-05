@@ -250,32 +250,38 @@ class InsertHandler implements Closeable {
      * folded to the identifier case used by the database (since unquoted
      * identifiers are case-insensitive), followed by the name as given.
      */
-    protected static Collection<String> tableNameCandidates(DatabaseMetaData metaData, String tableName) {
+    private Collection<String> tableNameCandidates(DatabaseMetaData metaData, String tableName) {
         final result = new LinkedHashSet<String>()
-        try {
-            if( metaData.storesUpperCaseIdentifiers() )
-                result.add(tableName.toUpperCase())
-            else if( metaData.storesLowerCaseIdentifiers() )
-                result.add(tableName.toLowerCase())
-        }
-        catch( SQLException | UnsupportedOperationException e ) {
-            log.debug "[SQL] unable to determine identifier case for this database: ${e.message}"
-        }
+        result.add(foldCase(metaData, tableName))
         result.add(tableName)
         return result
     }
 
+    private static String foldCase(DatabaseMetaData metaData, String name) {
+        try {
+            if( metaData.storesUpperCaseIdentifiers() )
+                return name.toUpperCase()
+            if( metaData.storesLowerCaseIdentifiers() )
+                return name.toLowerCase()
+        }
+        catch( SQLException | UnsupportedOperationException e ) {
+            log.debug "[SQL] unable to determine identifier case for this database: ${e.message}"
+        }
+        return name
+    }
+
     protected List<String> fetchColNames1(String tableName, Map<String,Object> record) {
-        final duplicates = record.keySet().groupBy(it -> it.toLowerCase()).values().findAll(it -> it.size()>1)
+        final keys = record.keySet()
+        final duplicates = keys.groupBy(it -> it.toLowerCase()).values().findAll(it -> it.size()>1)
         if( duplicates )
             throw new IllegalArgumentException("Invalid sqlInsert record - Keys must be unique ignoring case: ${duplicates.collect(it -> it.join(',')).join('; ')} - Offending record: $record")
-        final keys = record.keySet().collect(it -> it.toLowerCase()) as Set<String>
         final allCols = fetchColNames0(tableName)
-        // return only DB columns that match the map keys (case-insensitive)
-        final result = allCols.findAll(it -> it.toLowerCase() in keys)
-        // check if the record contains fields not mapped to table columns
-        final found = result.collect(it -> it.toLowerCase()) as Set<String>
-        final diff = record.keySet().findAll(it -> !(it.toLowerCase() in found))
+        final metaData = getConnection().getMetaData()
+        // a column matches a key ignoring case only if it was created unquoted
+        // (i.e. it is stored in the database identifier case), otherwise it must match exactly
+        final matches = { String col, String key -> col == key || (col.equalsIgnoreCase(key) && foldCase(metaData, col) == col) }
+        final result = allCols.findAll(col -> keys.any(key -> matches(col, key)))
+        final diff = keys.findAll(key -> !result.any(col -> matches(col, key)))
         if( diff )
             throw new IllegalArgumentException("Unknown columns for table '$into': ${diff.join(',')} - Offending record: $record")
         return result

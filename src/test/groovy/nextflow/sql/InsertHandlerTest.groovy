@@ -290,4 +290,23 @@ class InsertHandlerTest extends Specification {
         sql?.close()
     }
 
+    def 'should match quoted mixed-case columns exactly' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, "Alpha" varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform([id: 1, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'foo': alpha")
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
 }

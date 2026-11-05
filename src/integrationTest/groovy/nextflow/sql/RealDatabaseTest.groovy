@@ -204,6 +204,21 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
+    def 'should match quoted mixed-case columns exactly on postgres'() {
+        given:
+        createTable(postgres, 'insert8', 'id int primary key, "Alpha" varchar(255)')
+
+        when:
+        def handler = new InsertHandler(postgres.dataSource, [into: 'insert8'])
+        handler.perform([id: 1, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'insert8': alpha")
+
+        cleanup:
+        handler?.close()
+    }
+
     def 'should report unknown map columns on #db'() {
         given:
         createTable(db, 'insert3', 'id int primary key, alpha varchar(255)')
