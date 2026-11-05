@@ -198,9 +198,9 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         
         try (Connection conn = groovy.sql.Sql.newInstance(dataSource.toMap()).getConnection()) {
             try (Statement stm = conn.createStatement()) {
-                String normalizedStatement = normalizeStatement(statement)
+                String normalizedStatement = statement.trim()
                 
-                boolean isDDL = normalizedStatement.trim().toLowerCase().matches("^(create|alter|drop|truncate).*")
+                boolean isDDL = normalizedStatement.toLowerCase().matches("^(create|alter|drop|truncate).*")
                 
                 if (isDDL) {
                     stm.execute(normalizedStatement)
@@ -215,20 +215,5 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             log.error("Error executing SQL statement: ${e.message}", e)
             return [success: false, error: e.message]
         }
-    }
-
-    /**
-     * Normalizes a SQL statement by adding a semicolon if needed
-     *
-     * @param statement The SQL statement to normalize
-     * @return The normalized SQL statement
-     */
-    private static String normalizeStatement(String statement) {
-        if (!statement)
-            return null
-        def result = statement.trim()
-        if (!result.endsWith(';'))
-            result += ';'
-        return result
     }
 }

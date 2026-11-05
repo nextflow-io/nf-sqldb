@@ -9,6 +9,9 @@ See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to
 - Fix `sqlInsert` with inferred columns to match table and column names ignoring case (e.g. Postgres and MySQL lower-case columns, `into: 'FOO'` on Postgres)
 - Reject `sqlInsert` map records with keys that differ only by case
 - Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
+- Don't append a trailing semicolon to queries and statements, which Trino and other JDBC drivers reject (#16)
+- Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment
+- Don't reject paginated queries whose identifiers merely contain `limit` or `offset` (e.g. `rate_limit`)
 
 ## [0.7.1] - 2025-08-21
 
