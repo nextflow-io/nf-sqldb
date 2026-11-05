@@ -28,7 +28,7 @@ Follow these steps to package, upload, and publish the plugin:
 
 1. Update the [version file](./VERSION).
 
-2. Update the [changelog](./changelog.txt).
+2. Update the [changelog](./CHANGELOG.md).
 
 3. Run `make release` to build and publish the plugin. This task requires the following credentials:
 

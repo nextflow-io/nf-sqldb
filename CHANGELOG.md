@@ -1,14 +1,21 @@
-NF-SQLDB CHANGE-LOG
-===================
-0.7.1 - 21 Aug 2025
+# Changelog
+
+All notable changes to the nf-sqldb plugin will be documented here.
+
+See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+
+## [0.7.1] - 2025-08-21
+
 - Fix unresolved secrets detection to prevent silent fallback to default credentials
 - Add comprehensive secrets documentation and troubleshooting guide
 - Improve error messages for unknown database configurations
 
-0.7.0 - 28 May 2025
-- Add sqlExecutor and other minor improvements [072ae039]
+## [0.7.0] - 2025-05-28
 
-0.6.0 - 23 May 2025
+- Add `sqlExecutor` and other minor improvements [072ae039]
+
+## [0.6.0] - 2025-05-23
+
 - Update build scripts
 - Remove nf-bigquery plugin
 - Bump Nextflow to version 25.04.0
@@ -18,24 +25,30 @@ NF-SQLDB CHANGE-LOG
 - Bump sqlite-jdbc:3.47.0.0
 - Bump duckdb_jdbc:0.10.2
 
-0.5.0 - 30 Aug 2022
+## [0.5.0] - 2022-08-30
+
 - Bump nextflow required version to 22.08.1-edge
 
-0.4.1 - 25 May 2022
+## [0.4.1] - 2022-05-25
+
 - Fix AWS Athena driver dependency
 
-0.4.0 - 9 Apr 2022
+## [0.4.0] - 2022-04-09
+
 - Add support for batched queries via `batchSize` attribute
 - Add `emitColumns` option fromQuery operator
 
-0.3.0 6 Feb 2022
+## [0.3.0] - 2022-02-06
+
 - Add support for AWS Athena
 
-0.2.0 - 10 Oct 2021
+## [0.2.0] - 2021-10-10
+
 - Add support for batch inserts
 - Add support for insert operation setup statement to create missing table(s)
 - Add support fot SQLite
 - Add support for DuckDB
 
-0.1.0 - 1 Sep 2021
+## [0.1.0] - 2021-09-01
+
 - Initial release [https://github.com/nextflow-io/nextflow/commit/4d57979526d807a0d146697eb9c47d22696b0587]
