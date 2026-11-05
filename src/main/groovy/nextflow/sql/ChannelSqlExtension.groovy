@@ -33,6 +33,7 @@ import nextflow.plugin.extension.Factory
 import nextflow.plugin.extension.Function
 import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
+import nextflow.script.dsl.Description
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
@@ -73,11 +74,22 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         this.config = new SqlConfig((Map) session.config.navigate('sql.db'))
     }
 
+    @Description('''
+        The `fromQuery` factory queries a SQL database and creates a channel that emits a tuple for each row in the result set.
+    ''')
     @Factory
     DataflowWriteChannel fromQuery(String query) {
         fromQuery(Collections.emptyMap(), query)
     }
 
+    @Description('''
+        The `fromQuery` factory queries a SQL database and creates a channel that emits a tuple for each row in the result set.
+
+        Options:
+        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
+        - `batchSize`: query the data in batches of the given size (requires `LIMIT` and `OFFSET` support)
+        - `emitColumns`: when `true`, emit the column names as the first tuple
+    ''')
     @Factory
     DataflowWriteChannel fromQuery(Map opts, String query) {
         CheckHelper.checkParams('fromQuery', opts, QUERY_PARAMS)
@@ -114,6 +126,17 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         return dataSource
     }
 
+    @Description('''
+        The `sqlInsert` operator inserts each value from a source channel into a SQL database table, and forwards the values unchanged.
+
+        Options:
+        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
+        - `into`: the target table
+        - `columns`: the target column names, as a list or a comma-separated string, matching the tuple values emitted by the channel
+        - `statement`: the SQL `INSERT` statement to execute, using `?` as a placeholder for each value (overrides `into` and `columns`)
+        - `batchSize`: insert the data in batches of the given size (default: `10`)
+        - `setup`: a SQL statement to execute before inserting the data, e.g. to create the target table
+    ''')
     @Operator
     DataflowWriteChannel sqlInsert( DataflowReadChannel source, Map opts=null ) {
         CheckHelper.checkParams('sqlInsert', opts, INSERT_PARAMS)
@@ -149,6 +172,13 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * @param params A map containing 'db' (database alias) and 'statement' (SQL string to execute)
      * @return A map containing 'success' (boolean), 'result' (rows affected or null) and optionally 'error' (message)
      */
+    @Description('''
+        The `sqlExecute` function executes a SQL statement that does not return a result set, such as a DDL or DML statement. It returns a map with `success`, `result` (the number of affected rows for DML statements, `null` for DDL statements), and `error` (on failure).
+
+        Options:
+        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
+        - `statement`: the SQL statement to execute
+    ''')
     @Function
     Map sqlExecute(Map params) {
         CheckHelper.checkParams('sqlExecute', params, EXECUTE_PARAMS)
