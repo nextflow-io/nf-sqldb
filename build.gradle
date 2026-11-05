@@ -11,7 +11,7 @@ version = project.file('VERSION').text.trim()
 nextflowPlugin {
     nextflowVersion = '25.04.0'
 
-    provider = 'Seqera Labs'
+    provider = 'nextflow'
     className = 'nextflow.sql.SqlPlugin'
     extensionPoints = [
         'nextflow.sql.ChannelSqlExtension'

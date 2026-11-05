@@ -16,7 +16,7 @@ NOTE: THIS IS A PREVIEW TECHNOLOGY, FEATURES AND CONFIGURATION SETTINGS CAN CHAN
 
 ## Getting started
 
-This plugin requires Nextflow `22.08.1-edge` or later. You can enable the plugin by adding the following snippet to your `nextflow.config` file:
+This plugin requires Nextflow `25.04.0` or later. You can enable the plugin by adding the following snippet to your `nextflow.config` file:
 
 ```groovy
 plugins {
