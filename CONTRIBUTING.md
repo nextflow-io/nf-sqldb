@@ -10,7 +10,7 @@ Run the unit tests:
 make test
 ```
 
-Run the integration tests against real databases (Postgres, MySQL and MariaDB). This requires Docker:
+Run the integration tests against real databases (Postgres and MySQL). This requires Docker:
 
 ```bash
 make integration-test

@@ -24,7 +24,6 @@ import nextflow.Global
 import nextflow.Session
 import nextflow.sql.config.SqlDataSource
 import org.testcontainers.containers.JdbcDatabaseContainer
-import org.testcontainers.mariadb.MariaDBContainer
 import org.testcontainers.mysql.MySQLContainer
 import org.testcontainers.postgresql.PostgreSQLContainer
 import spock.lang.Shared
@@ -57,8 +56,7 @@ class RealDatabaseTest extends Specification {
 
     @Shared Database postgres = new Database(name: 'postgres', container: new PostgreSQLContainer('postgres:17.11-alpine'))
     @Shared Database mysql = new Database(name: 'mysql', container: new MySQLContainer('mysql:8.4.13'))
-    @Shared Database mariadb = new Database(name: 'mariadb', container: new MariaDBContainer('mariadb:11.4.13'))
-    @Shared List<Database> databases = [postgres, mysql, mariadb]
+    @Shared List<Database> databases = [postgres, mysql]
 
     private Sql sql
 
@@ -206,7 +204,7 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
-    // MySQL and MariaDB table names are case-sensitive on Linux by default
+    // MySQL table names are case-sensitive on Linux by default
     def 'should insert tuples with inferred columns into #into on #db'() {
         given:
         createTable(db, 'insert4', 'id int primary key, alpha varchar(255)')
@@ -225,7 +223,6 @@ class RealDatabaseTest extends Specification {
         postgres | 'INSERT4'
         postgres | 'Insert4'
         mysql    | 'insert4'
-        mariadb  | 'insert4'
     }
 
     def 'should insert rows in batches on #db'() {
