@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build nf-sqldb
@@ -26,7 +30,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ratchet:actions/checkout@v4
         with:
           fetch-depth: 1
-          submodules: true
 
       - name: Setup Java ${{ matrix.java_version }}
         uses: actions/setup-java@0f62d2ad8407a414cddd4790bed06fd9ebda0f56 # ratchet:actions/setup-java@v1
@@ -62,7 +65,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ratchet:actions/checkout@v4
         with:
           fetch-depth: 1
-          submodules: true
 
       - name: Setup Java 21
         uses: actions/setup-java@0f62d2ad8407a414cddd4790bed06fd9ebda0f56 # ratchet:actions/setup-java@v1
