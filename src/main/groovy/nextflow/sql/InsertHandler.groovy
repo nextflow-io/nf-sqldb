@@ -49,6 +49,7 @@ class InsertHandler implements Closeable {
     private String sqlStatement
     private String into
     private List<String> columns
+    private List<String> recordKeys
     private int batchSize
     private int batchCount
     private PreparedStatement preparedStatement
@@ -174,9 +175,11 @@ class InsertHandler implements Closeable {
 
     protected void performAsMap(String sql, Map record) {
         executeStm(sql) {stm ->
+            if( recordKeys==null )
+                recordKeys = columns.collect(it -> findKey(record, it))
             // loop over the expected columns and fetch a corresponding record value to be inserted
             for(int i=0; i<columns.size(); i++ ) {
-                final value = getIgnoreCase(record, columns[i])
+                final value = record.get(recordKeys[i])
                 stm.setObject(i+1, value)
             }
             // report a debug line
@@ -263,6 +266,9 @@ class InsertHandler implements Closeable {
     }
 
     protected List<String> fetchColNames1(String tableName, Map<String,Object> record) {
+        final duplicates = record.keySet().groupBy(it -> it.toLowerCase()).values().findAll(it -> it.size()>1)
+        if( duplicates )
+            throw new IllegalArgumentException("Invalid sqlInsert record - Keys must be unique ignoring case: ${duplicates.collect(it -> it.join(',')).join('; ')} - Offending record: $record")
         final keys = record.keySet().collect(it -> it.toLowerCase()) as Set<String>
         final allCols = fetchColNames0(tableName)
         // return only DB columns that match the map keys (case-insensitive)
@@ -275,14 +281,13 @@ class InsertHandler implements Closeable {
         return result
     }
 
-    private static Object getIgnoreCase(Map record, String key) {
-        if( record.containsKey(key) )
-            return record.get(key)
-        for( Map.Entry entry : (Set<Map.Entry>)record.entrySet() ) {
-            if( key.equalsIgnoreCase(entry.key as String) )
-                return entry.value
-        }
-        return null
+    private static String findKey(Map record, String column) {
+        if( record.containsKey(column) )
+            return column
+        final matches = record.keySet().findAll(it -> column.equalsIgnoreCase(it as String))
+        if( matches.size()>1 )
+            throw new IllegalArgumentException("Invalid sqlInsert record - Ambiguous keys for column '$column': ${matches.join(',')} - Offending record: $record")
+        return matches ? matches.first() as String : column
     }
 
     void close() {

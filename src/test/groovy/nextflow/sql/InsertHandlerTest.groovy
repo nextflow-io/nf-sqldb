@@ -224,4 +224,70 @@ class InsertHandlerTest extends Specification {
         sql?.close()
     }
 
+    def 'should insert map with explicit columns ignoring key case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: 'id,alpha'])
+
+        when:
+        handler.perform([ID: 1, Alpha: 'Hola'])
+        handler.perform([ID: 2, Alpha: 'Ciao'])
+        handler.close()
+        then:
+        def result = sql.rows('select * from foo order by id')
+        result.id == [1, 2]
+        result.alpha == ['Hola', 'Ciao']
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should reject map keys that differ only by case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: COLUMNS])
+
+        when:
+        handler.perform([id: 1, ID: 2, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains(MESSAGE)
+        sql.rows('select * from foo') == []
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        COLUMNS     | MESSAGE
+        null        | 'Keys must be unique ignoring case: id,ID'
+        'Id,alpha'  | "Ambiguous keys for column 'Id': id,ID"
+    }
+
+    def 'should use exact map key with explicit columns' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: 'id,alpha'])
+
+        when:
+        handler.perform([id: 1, ID: 2, alpha: 'a'])
+        handler.close()
+        then:
+        sql.rows('select * from foo').id == [1]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
 }

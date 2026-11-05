@@ -186,6 +186,24 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
+    def 'should reject map keys that differ only by case on #db'() {
+        given:
+        createTable(db, 'insert7', 'id int primary key, alpha varchar(255)')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert7'])
+        handler.perform([id: 1, ID: 2, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Keys must be unique ignoring case: id,ID')
+
+        cleanup:
+        handler?.close()
+
+        where:
+        db << databases
+    }
+
     def 'should report unknown map columns on #db'() {
         given:
         createTable(db, 'insert3', 'id int primary key, alpha varchar(255)')
