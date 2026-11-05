@@ -1,13 +1,11 @@
-name: NF-SQLDB CI test
+name: nf-sqldb CI
 on:
   push:
     branches:
-      - '*'
-    tags-ignore:
-      - '*'
+      - 'master'
   pull_request:
-    branches:
-      - '*'
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
 jobs:
   build:
     name: Build nf-sqldb
@@ -18,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         java_version: [17, 21]
+        nextflow_version: ['25.04']
 
     steps:
       - name: Environment
@@ -26,6 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ratchet:actions/checkout@v4
         with:
+          fetch-depth: 1
           submodules: true
 
       - name: Setup Java ${{ matrix.java_version }}
@@ -33,20 +33,20 @@ jobs:
         with:
           java-version: ${{matrix.java_version}}
           architecture: x64
+          distribution: 'temurin'
 
-      - name: Compile
-        run: ./gradlew assemble
-
-      - name: Tests
-        run: ./gradlew check
+      - name: Unit tests
+        run: make test
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'
-          NXF_SMOKE: 1
 
-      - name: Publish
-        if: failure()
-        run: bash pub-tests.sh github
-        env:
-          TEST_JDK: ${{ matrix.java_version }}
-          NXF_AWS_ACCESS: ${{ secrets.NXF_AWS_ACCESS }}
-          NXF_AWS_SECRET: ${{ secrets.NXF_AWS_SECRET }}
+      - name: Setup Nextflow ${{ matrix.nextflow_version }}
+        uses: nf-core/setup-nextflow@b9f764e8ba5c76b712ace14ecbfcef0e40ae2dd8 # v1
+        with:
+          version: "${{ matrix.nextflow_version }}"
+
+      - name: Install
+        run: make install
+
+      - name: Test
+        run: nextflow run examples/sql-execution -plugins nf-sqldb@$(cat VERSION)
