@@ -72,7 +72,6 @@ dependencies {
 
     testImplementation 'org.apache.groovy:groovy-nio:4.0.26'
     testImplementation('org.apache.groovy:groovy-test:4.0.26') { exclude group: 'org.apache.groovy' }
-    testImplementation 'cglib:cglib-nodep:3.3.0'
     testImplementation 'com.google.jimfs:jimfs:1.1'
 }
 
