@@ -49,7 +49,7 @@ class InsertHandlerTest extends Specification {
 
     def 'should fetch columns names from db' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def ds = new SqlDataSource([url:JDBC_URL])
@@ -59,11 +59,13 @@ class InsertHandlerTest extends Specification {
         then:
         handler.getSqlStatement([]) == 'insert into FOO ( ID,ALPHA,OMEGA ) values ( ?,?,? )'
 
+        cleanup:
+        handler?.close()
     }
 
     def 'should insert data into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
@@ -84,11 +86,15 @@ class InsertHandlerTest extends Specification {
         result.id == [1,2,3]
         result.alpha == ['Hello world','Hola mundo','Ciao mondo']
         result.omega == [100,200,300]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
     }
 
     def 'should insert single value into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -107,11 +113,15 @@ class InsertHandlerTest extends Specification {
         result.size() == 3
         and:
         result.id == [1,2,3]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
     }
 
     def 'should insert map into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -131,6 +141,172 @@ class InsertHandlerTest extends Specification {
         and:
         result.id == [1,2,3]
         result.alpha == ['Hola', 'Ciao', 'Hello']
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should insert map with inferred columns ignoring case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}${OPTS}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255), omega int)')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([alpha: 'Hola', ID: 1])
+        handler.perform([alpha: 'Ciao', ID: 2])
+        handler.close()
+        then:
+        handler.getSqlStatement([:]) == "insert into $TABLE ( $COLS ) values ( ?,? )"
+        and:
+        def result = sql.rows('select * from foo order by id')
+        result.id == [1, 2]
+        result.alpha == ['Hola', 'Ciao']
+        result.omega == [null, null]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        OPTS                       | TABLE | COLS
+        ''                         | 'foo' | 'ID,ALPHA'
+        ''                         | 'FOO' | 'ID,ALPHA'
+        ';DATABASE_TO_LOWER=TRUE'  | 'foo' | 'id,alpha'
+        ';DATABASE_TO_LOWER=TRUE'  | 'FOO' | 'id,alpha'
+    }
+
+    def 'should insert tuple with inferred columns ignoring table case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}${OPTS}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([1, 'Hola'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $TABLE ( $COLS ) values ( ?,? )"
+        sql.rows('select * from foo').id == [1]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        OPTS                       | TABLE | COLS
+        ''                         | 'foo' | 'ID,ALPHA'
+        ';DATABASE_TO_LOWER=TRUE'  | 'foo' | 'id,alpha'
+        ';DATABASE_TO_LOWER=TRUE'  | 'FOO' | 'id,alpha'
+    }
+
+    def 'should report unknown map columns' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform([id: 1, Beta: 'x'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'foo': Beta")
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should insert map with explicit columns ignoring key case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: 'id,alpha'])
+
+        when:
+        handler.perform([ID: 1, Alpha: 'Hola'])
+        handler.perform([ID: 2, Alpha: 'Ciao'])
+        handler.close()
+        then:
+        def result = sql.rows('select * from foo order by id')
+        result.id == [1, 2]
+        result.alpha == ['Hola', 'Ciao']
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should reject map keys that differ only by case' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: COLUMNS])
+
+        when:
+        handler.perform([id: 1, ID: 2, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains(MESSAGE)
+        sql.rows('select * from foo') == []
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        COLUMNS     | MESSAGE
+        null        | 'Keys must be unique ignoring case: id,ID'
+        'Id,alpha'  | "Ambiguous keys for column 'Id': id,ID"
+    }
+
+    def 'should use exact map key with explicit columns' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo', columns: 'id,alpha'])
+
+        when:
+        handler.perform([id: 1, ID: 2, alpha: 'a'])
+        handler.close()
+        then:
+        sql.rows('select * from foo').id == [1]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should match quoted mixed-case columns exactly' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key, "Alpha" varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform([id: 1, alpha: 'a'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'foo': alpha")
+
+        cleanup:
+        handler?.close()
+        sql?.close()
     }
 
 }

@@ -42,7 +42,7 @@ class SqlExecutionTest extends Specification {
 
     def 'should execute DDL statements successfully and return success map'() {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_ddl_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
@@ -84,11 +84,14 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_TABLE\'').size() == 0
         dropResult.success == true
         dropResult.result == null
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should execute DML statements successfully and return affected row count'() {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_dml_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and: 'Create a table'
@@ -134,11 +137,14 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT * FROM test_dml').size() == 0
         deleteResult.success == true
         deleteResult.result == 1
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should return correct affected row count for multiple row operations'() {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_update_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and: 'Create a table and insert multiple rows'
@@ -186,11 +192,14 @@ class SqlExecutionTest extends Specification {
         deleteResult.success == true
         deleteResult.result == 4
         sql.rows('SELECT * FROM test_update').size() == 0
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should handle invalid SQL correctly'() {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_error_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         
         and:
         def session = Mock(Session) {
@@ -263,7 +272,7 @@ class SqlExecutionTest extends Specification {
 
     def 'should handle statement normalization correctly'() {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_norm_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         
         and:
@@ -294,5 +303,8 @@ class SqlExecutionTest extends Specification {
         sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_NORM\'').size() == 0
         dropResult.success == true
         dropResult.result == null
+
+        cleanup:
+        sql?.close()
     }
 } 

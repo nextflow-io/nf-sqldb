@@ -18,7 +18,9 @@
 package nextflow.sql
 
 import java.sql.Connection
+import java.sql.DatabaseMetaData
 import java.sql.PreparedStatement
+import java.sql.SQLException
 import java.sql.SQLFeatureNotSupportedException
 
 import groovy.sql.Sql
@@ -47,6 +49,7 @@ class InsertHandler implements Closeable {
     private String sqlStatement
     private String into
     private List<String> columns
+    private List<String> recordKeys
     private int batchSize
     private int batchCount
     private PreparedStatement preparedStatement
@@ -172,10 +175,11 @@ class InsertHandler implements Closeable {
 
     protected void performAsMap(String sql, Map record) {
         executeStm(sql) {stm ->
+            if( recordKeys==null )
+                recordKeys = columns.collect(it -> findKey(record, it))
             // loop over the expected columns and fetch a corresponding record value to be inserted
             for(int i=0; i<columns.size(); i++ ) {
-                final col = columns[i]
-                final value = record.get(col)
+                final value = record.get(recordKeys[i])
                 stm.setObject(i+1, value)
             }
             // report a debug line
@@ -223,32 +227,73 @@ class InsertHandler implements Closeable {
 
     @Memoized
     protected List<String> fetchColNames0(String tableName) {
-        final conn = getConnection()
-        final metaData  = conn.getMetaData()
-        final resultSet = metaData.getColumns(null, null, tableName, null);
-
-        final result = [] as List<String>
-        while (resultSet.next()){
-            result.add( resultSet.getString("COLUMN_NAME") )
+        final metaData = getConnection().getMetaData()
+        for( String name : tableNameCandidates(metaData, tableName) ) {
+            final result = queryColNames(metaData, name)
+            if( result )
+                return result
         }
+        return []
+    }
 
+    private static List<String> queryColNames(DatabaseMetaData metaData, String tableName) {
+        final result = [] as List<String>
+        try( final resultSet = metaData.getColumns(null, null, tableName, null) ) {
+            while( resultSet.next() )
+                result.add( resultSet.getString("COLUMN_NAME") )
+        }
         return result
     }
 
-    protected List<String> fetchColNames1(String tableName, Map<String,Object> record) {
-        final keys = record.keySet().collect(it -> it.toUpperCase())
-        final allCols = fetchColNames0(tableName)
-        final result = new ArrayList(allCols.size())
-        // return only DB columns that belongs map keys
-        for( String it : allCols ) {
-            if( it in keys )
-                result.add(it)
+    /**
+     * Get the table names to look up in the database metadata, i.e. the name
+     * folded to the identifier case used by the database (since unquoted
+     * identifiers are case-insensitive), followed by the name as given.
+     */
+    private Collection<String> tableNameCandidates(DatabaseMetaData metaData, String tableName) {
+        final result = new LinkedHashSet<String>()
+        result.add(foldCase(metaData, tableName))
+        result.add(tableName)
+        return result
+    }
+
+    private static String foldCase(DatabaseMetaData metaData, String name) {
+        try {
+            if( metaData.storesUpperCaseIdentifiers() )
+                return name.toUpperCase()
+            if( metaData.storesLowerCaseIdentifiers() )
+                return name.toLowerCase()
         }
-        // check if the record contains fields not mapped to table columns
-        final diff = keys - result
+        catch( SQLException | UnsupportedOperationException e ) {
+            log.debug "[SQL] unable to determine identifier case for this database: ${e.message}"
+        }
+        return name
+    }
+
+    protected List<String> fetchColNames1(String tableName, Map<String,Object> record) {
+        final keys = record.keySet()
+        final duplicates = keys.groupBy(it -> it.toLowerCase()).values().findAll(it -> it.size()>1)
+        if( duplicates )
+            throw new IllegalArgumentException("Invalid sqlInsert record - Keys must be unique ignoring case: ${duplicates.collect(it -> it.join(',')).join('; ')} - Offending record: $record")
+        final allCols = fetchColNames0(tableName)
+        final metaData = getConnection().getMetaData()
+        // a column matches a key ignoring case only if it was created unquoted
+        // (i.e. it is stored in the database identifier case), otherwise it must match exactly
+        final matches = { String col, String key -> col == key || (col.equalsIgnoreCase(key) && foldCase(metaData, col) == col) }
+        final result = allCols.findAll(col -> keys.any(key -> matches(col, key)))
+        final diff = keys.findAll(key -> !result.any(col -> matches(col, key)))
         if( diff )
             throw new IllegalArgumentException("Unknown columns for table '$into': ${diff.join(',')} - Offending record: $record")
         return result
+    }
+
+    private static String findKey(Map record, String column) {
+        if( record.containsKey(column) )
+            return column
+        final matches = record.keySet().findAll(it -> column.equalsIgnoreCase(it as String))
+        if( matches.size()>1 )
+            throw new IllegalArgumentException("Invalid sqlInsert record - Ambiguous keys for column '$column': ${matches.join(',')} - Offending record: $record")
+        return matches ? matches.first() as String : column
     }
 
     void close() {
@@ -256,6 +301,7 @@ class InsertHandler implements Closeable {
             if( preparedStatement && batchCount>0 ) {
                 log.debug("[SQL] flushing and committing open batch")
                 preparedStatement.executeBatch()
+                batchCount = 0
                 preparedStatement.close()
                 safeCommit(connection)
             }
@@ -264,6 +310,7 @@ class InsertHandler implements Closeable {
             if( connection ) {
                 log.debug "[SQL] closing JDBC connection"
                 connection.close()
+                connection = null
             }
         }
     }

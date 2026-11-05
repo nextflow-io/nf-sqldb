@@ -4,6 +4,12 @@ All notable changes to the nf-sqldb plugin will be documented here.
 
 See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## Unreleased
+
+- Fix `sqlInsert` with inferred columns to match table and column names ignoring case (e.g. Postgres and MySQL lower-case columns, `into: 'FOO'` on Postgres)
+- Reject `sqlInsert` map records with keys that differ only by case
+- Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
+
 ## [0.7.1] - 2025-08-21
 
 - Fix unresolved secrets detection to prevent silent fallback to default credentials

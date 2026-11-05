@@ -33,7 +33,7 @@ class ChannelSqlExtensionTest extends Specification {
 
     def 'should create channel from query' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
@@ -61,12 +61,15 @@ class ChannelSqlExtensionTest extends Specification {
         then:
         result.val == ['hello', 30]
         result.val == Channel.STOP
+
+        cleanup:
+        sql?.close()
     }
 
 
     def 'should insert data into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(1_000_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         and:
         sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
@@ -95,6 +98,9 @@ class ChannelSqlExtensionTest extends Specification {
         rows.size() == 3
         rows.id == [1,2,3]
         rows.alpha == ['x1','y2','z3']
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should error on unresolved secrets' () {

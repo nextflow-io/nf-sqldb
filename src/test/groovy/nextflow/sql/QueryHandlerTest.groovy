@@ -132,7 +132,7 @@ class QueryHandlerTest extends Specification {
 
     def 'should test paginated query' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255));'
         def ds = new SqlDataSource([url:JDBC_URL])
         and:
@@ -188,5 +188,8 @@ class QueryHandlerTest extends Specification {
         result2.getVal() == ['ID', 'ALPHA']
         result2.getVal() == [1, 'Hello 1']
         result2.getVal() == [2, 'Hello 2']
+
+        cleanup:
+        sql?.close()
     }
 }
