@@ -100,3 +100,31 @@ tasks.withType(GenerateModuleMetadata).configureEach {
 test {
     systemProperty 'pluginVersion', version
 }
+
+// Integration tests against real databases (requires Docker), not part of `check`
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    integrationTestImplementation 'org.testcontainers:testcontainers-postgresql:2.0.5'
+    integrationTestImplementation 'org.testcontainers:testcontainers-mysql:2.0.5'
+    integrationTestImplementation 'org.testcontainers:testcontainers-mariadb:2.0.5'
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs the integration tests against real databases (requires Docker).'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.test
+}

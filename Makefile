@@ -12,6 +12,10 @@ clean:
 test:
 	./gradlew test
 
+# Run integration tests against real databases (requires Docker)
+integration-test:
+	./gradlew integrationTest
+
 # Build the plugin and run all checks
 check:
 	./gradlew check

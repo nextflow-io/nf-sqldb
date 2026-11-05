@@ -1,0 +1,293 @@
+/*
+ * Copyright 2020-2025, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package nextflow.sql
+
+import groovy.sql.Sql
+import groovyx.gpars.dataflow.DataflowQueue
+import nextflow.Channel
+import nextflow.Global
+import nextflow.Session
+import nextflow.sql.config.SqlDataSource
+import org.testcontainers.containers.JdbcDatabaseContainer
+import org.testcontainers.mariadb.MariaDBContainer
+import org.testcontainers.mysql.MySQLContainer
+import org.testcontainers.postgresql.PostgreSQLContainer
+import spock.lang.Shared
+import spock.lang.Specification
+import spock.lang.Timeout
+
+/**
+ * Run the SQL operations against real databases using testcontainers.
+ *
+ * The containers are started once in setupSpec, which is not subject
+ * to the per-feature timeout.
+ */
+@Timeout(60)
+class RealDatabaseTest extends Specification {
+
+    static class Database {
+        String name
+        JdbcDatabaseContainer container
+
+        SqlDataSource getDataSource() {
+            new SqlDataSource([url: container.jdbcUrl, user: container.username, password: container.password])
+        }
+
+        Sql connect() {
+            Sql.newInstance(container.jdbcUrl, container.username, container.password)
+        }
+
+        String toString() { name }
+    }
+
+    @Shared Database postgres = new Database(name: 'postgres', container: new PostgreSQLContainer('postgres:17.11-alpine'))
+    @Shared Database mysql = new Database(name: 'mysql', container: new MySQLContainer('mysql:8.4.13'))
+    @Shared Database mariadb = new Database(name: 'mariadb', container: new MariaDBContainer('mariadb:11.4.13'))
+    @Shared List<Database> databases = [postgres, mysql, mariadb]
+
+    private Sql sql
+
+    def setupSpec() {
+        databases.parallelStream().forEach { it.container.start() }
+    }
+
+    def cleanupSpec() {
+        databases.each { it.container.stop() }
+    }
+
+    def setup() {
+        Global.session = Mock(Session)
+    }
+
+    def cleanup() {
+        sql?.close()
+        Global.session = null
+    }
+
+    private void createTable(Database db, String table, String columns) {
+        sql = db.connect()
+        sql.execute("drop table if exists $table".toString())
+        sql.execute("create table $table($columns)".toString())
+    }
+
+    private static List drain(DataflowQueue queue) {
+        final result = []
+        def value
+        while( (value = queue.getVal()) != Channel.STOP )
+            result << value
+        return result
+    }
+
+    def 'should query rows on #db'() {
+        given:
+        createTable(db, 'query1', 'id int primary key, alpha varchar(255)')
+        sql.execute("insert into query1(id, alpha) values (1, 'a'), (2, 'b'), (3, 'c')")
+
+        when:
+        def result = new DataflowQueue()
+        new QueryHandler()
+                .withTarget(result)
+                .withStatement('select id, alpha from query1 order by id')
+                .withDataSource(db.dataSource)
+                .perform()
+        then:
+        drain(result) == [[1, 'a'], [2, 'b'], [3, 'c']]
+
+        where:
+        db << databases
+    }
+
+    def 'should query rows with pagination on #db'() {
+        given:
+        createTable(db, 'query2', 'id int primary key, alpha varchar(255)')
+        for( int x : 1..13 )
+            sql.execute('insert into query2(id, alpha) values (?, ?)', [x, "Hello $x".toString()])
+
+        when:
+        def result = new DataflowQueue()
+        def handler = new QueryHandler()
+                .withTarget(result)
+                .withStatement('select id, alpha from query2 order by id')
+                .withDataSource(db.dataSource)
+                .withOpts(batchSize: 5)
+                .perform()
+        then:
+        handler.queryCount() == 3
+        drain(result) == (1..13).collect { [it, "Hello $it".toString()] }
+
+        where:
+        db << databases
+    }
+
+    def 'should query rows with column names on #db'() {
+        given:
+        createTable(db, 'query3', 'id int primary key, alpha varchar(255)')
+        sql.execute("insert into query3(id, alpha) values (1, 'a')")
+
+        when:
+        def result = new DataflowQueue()
+        new QueryHandler()
+                .withTarget(result)
+                .withStatement('select id, alpha from query3')
+                .withDataSource(db.dataSource)
+                .withOpts(emitColumns: true)
+                .perform()
+        then:
+        // unlike H2, these databases report lower-case column names
+        drain(result) == [['id', 'alpha'], [1, 'a']]
+
+        where:
+        db << databases
+    }
+
+    def 'should insert tuples with explicit columns on #db'() {
+        given:
+        createTable(db, 'insert1', 'id int primary key, alpha varchar(255), omega int')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert1', columns: 'id,alpha'])
+        handler.perform([1, 'a'])
+        handler.perform([2, 'b'])
+        handler.close()
+        then:
+        sql.rows('select id, alpha, omega from insert1 order by id').collect { [it.id, it.alpha, it.omega] } == [[1, 'a', null], [2, 'b', null]]
+
+        where:
+        db << databases
+    }
+
+    def 'should insert maps with inferred columns on #db'() {
+        given:
+        createTable(db, 'insert2', 'id int primary key, alpha varchar(255), omega int')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert2'])
+        handler.perform([Alpha: 'a', ID: 1])
+        handler.perform([Alpha: 'b', ID: 2])
+        handler.close()
+        then:
+        handler.getSqlStatement([:]) == 'insert into insert2 ( id,alpha ) values ( ?,? )'
+        sql.rows('select id, alpha, omega from insert2 order by id').collect { [it.id, it.alpha, it.omega] } == [[1, 'a', null], [2, 'b', null]]
+
+        where:
+        db << databases
+    }
+
+    def 'should report unknown map columns on #db'() {
+        given:
+        createTable(db, 'insert3', 'id int primary key, alpha varchar(255)')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert3'])
+        handler.perform([id: 1, beta: 'x'])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Unknown columns for table 'insert3': beta")
+
+        cleanup:
+        handler?.close()
+
+        where:
+        db << databases
+    }
+
+    // MySQL and MariaDB table names are case-sensitive on Linux by default
+    def 'should insert tuples with inferred columns into #into on #db'() {
+        given:
+        createTable(db, 'insert4', 'id int primary key, alpha varchar(255)')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: into])
+        handler.perform([1, 'a'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $into ( id,alpha ) values ( ?,? )"
+        sql.rows('select id, alpha from insert4').collect { [it.id, it.alpha] } == [[1, 'a']]
+
+        where:
+        db       | into
+        postgres | 'insert4'
+        postgres | 'INSERT4'
+        postgres | 'Insert4'
+        mysql    | 'insert4'
+        mariadb  | 'insert4'
+    }
+
+    def 'should insert rows in batches on #db'() {
+        given:
+        createTable(db, 'insert5', 'id int primary key, alpha varchar(255)')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert5', columns: 'id,alpha', batchSize: 10])
+        for( int x : 1..25 )
+            handler.perform([x, "Hello $x".toString()])
+        then: 'only complete batches are committed'
+        sql.firstRow('select count(*) as cnt from insert5').cnt == 20
+
+        when:
+        handler.close()
+        then: 'the last partial batch is committed on close'
+        sql.firstRow('select count(*) as cnt from insert5').cnt == 25
+
+        where:
+        db << databases
+    }
+
+    def 'should execute DDL statements on #db'() {
+        given:
+        sql = db.connect()
+        sql.execute('drop table if exists exec1')
+        def ext = extension(db)
+
+        expect:
+        ext.sqlExecute(statement: 'create table exec1(id int primary key)') == [success: true, result: null]
+        ext.sqlExecute(statement: 'alter table exec1 add column alpha varchar(255)') == [success: true, result: null]
+        sql.rows('select id, alpha from exec1') == []
+        ext.sqlExecute(statement: 'drop table exec1') == [success: true, result: null]
+        ext.sqlExecute(statement: 'select * from exec1').success == false
+
+        where:
+        db << databases
+    }
+
+    def 'should execute DML statements on #db'() {
+        given:
+        createTable(db, 'exec2', 'id int primary key, alpha varchar(255)')
+        def ext = extension(db)
+
+        expect:
+        ext.sqlExecute(statement: "insert into exec2(id, alpha) values (1, 'a'), (2, 'b'), (3, 'c')") == [success: true, result: 3]
+        ext.sqlExecute(statement: "update exec2 set alpha = 'z' where id > 1") == [success: true, result: 2]
+        ext.sqlExecute(statement: 'delete from exec2 where id = 1') == [success: true, result: 1]
+        ext.sqlExecute(statement: 'delete from exec2 where id = 1') == [success: true, result: 0]
+        sql.rows('select id, alpha from exec2 order by id').collect { [it.id, it.alpha] } == [[2, 'z'], [3, 'z']]
+
+        where:
+        db << databases
+    }
+
+    private ChannelSqlExtension extension(Database db) {
+        final ds = db.dataSource
+        final session = Mock(Session) {
+            getConfig() >> [sql: [db: [default: [url: ds.url, user: ds.user, password: ds.password]]]]
+        }
+        final result = new ChannelSqlExtension()
+        result.init(session)
+        return result
+    }
+}
