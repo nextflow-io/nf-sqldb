@@ -329,4 +329,30 @@ class SqlExecutionTest extends Specification {
         cleanup:
         sql?.close()
     }
+
+    def 'should detect multi-line DDL statements'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+
+        when:
+        def createResult = sqlExtension.sqlExecute([db: 'test', statement: 'CREATE TABLE test_multi (\n  id INT PRIMARY KEY\n)'])
+        def alterResult = sqlExtension.sqlExecute([db: 'test', statement: 'alter table test_multi\n  add column name VARCHAR(255)'])
+        def insertResult = sqlExtension.sqlExecute([db: 'test', statement: 'INSERT INTO test_multi\nVALUES (1, \'foo\')'])
+        def dropResult = sqlExtension.sqlExecute([db: 'test', statement: '\n  Drop\nTABLE test_multi'])
+        then:
+        createResult == [success: true, result: null]
+        alterResult == [success: true, result: null]
+        insertResult == [success: true, result: 1]
+        dropResult == [success: true, result: null]
+        sql.rows('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = \'TEST_MULTI\'').size() == 0
+
+        cleanup:
+        sql?.close()
+    }
 }

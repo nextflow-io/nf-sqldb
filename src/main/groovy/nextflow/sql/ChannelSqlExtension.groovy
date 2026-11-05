@@ -200,7 +200,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             try (Statement stm = conn.createStatement()) {
                 String normalizedStatement = statement.trim()
                 
-                boolean isDDL = normalizedStatement.toLowerCase().matches("^(create|alter|drop|truncate).*")
+                boolean isDDL = normalizedStatement ==~ /(?is)(create|alter|drop|truncate)\b.*/
                 
                 if (isDDL) {
                     stm.execute(normalizedStatement)
