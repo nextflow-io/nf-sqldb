@@ -1,6 +1,11 @@
+# Ignore Gradle project-specific cache directory
 .gradle
 .idea
-.nextflow
+.nextflow*
+gradle.properties
+
+# Ignore Gradle build output directory
 build
-dist
 out
+work
+results
