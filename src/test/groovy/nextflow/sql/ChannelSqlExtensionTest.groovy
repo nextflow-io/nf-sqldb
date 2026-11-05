@@ -43,6 +43,8 @@ class ChannelSqlExtensionTest extends Specification {
         and:
         def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
+            // run the query as soon as it is registered
+            addIgniter(_) >> { Closure action -> action.call() }
         }
         def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
 
