@@ -186,6 +186,22 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
+    def 'should insert maps with inferred columns into #into on postgres'() {
+        given:
+        createTable(postgres, 'insert6', 'id int primary key, alpha varchar(255)')
+
+        when:
+        def handler = new InsertHandler(postgres.dataSource, [into: into])
+        handler.perform([alpha: 'a', id: 1])
+        handler.close()
+        then:
+        handler.getSqlStatement([:]) == "insert into $into ( id,alpha ) values ( ?,? )"
+        sql.rows('select id, alpha from insert6').collect { [it.id, it.alpha] } == [[1, 'a']]
+
+        where:
+        into << ['INSERT6', 'Insert6']
+    }
+
     def 'should reject map keys that differ only by case on #db'() {
         given:
         createTable(db, 'insert7', 'id int primary key, alpha varchar(255)')
