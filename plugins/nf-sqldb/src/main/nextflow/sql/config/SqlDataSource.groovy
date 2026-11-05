@@ -17,6 +17,9 @@
 
 package nextflow.sql.config
 
+import java.sql.Connection
+
+import groovy.sql.Sql
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
 import nextflow.extension.Bolts
@@ -39,12 +42,14 @@ class SqlDataSource {
     String url
     String user
     String password
+    Map<String,String> properties
 
     SqlDataSource(Map opts) {
         this.url = opts.url ?: DEFAULT_URL
         this.driver = opts.driver ?: urlToDriver(url) ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password')
+        this.properties = resolveProperties(opts.properties)
     }
 
     SqlDataSource(Map opts, SqlDataSource fallback) {
@@ -52,6 +57,31 @@ class SqlDataSource {
         this.driver = opts.driver ?: urlToDriver(url) ?: fallback.driver ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: fallback.user ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password') ?: fallback.password
+        this.properties = opts.properties!=null ? resolveProperties(opts.properties) : fallback.properties
+    }
+
+    /**
+     * Normalise the JDBC driver properties declared in the config into a map of strings
+     *
+     * @param value The `properties` config value
+     * @return An immutable map of driver properties, or an empty map when not specified
+     * @throws IllegalArgumentException if the value is not a map
+     */
+    protected Map<String,String> resolveProperties(Object value) {
+        if( value == null )
+            return Collections.<String,String>emptyMap()
+        if( !(value instanceof Map) )
+            throw new IllegalArgumentException(
+                    "Invalid 'properties' setting for the SQL data source -- " +
+                    "it must be a map of JDBC driver properties, offending value: '$value' [${value.getClass().getName()}]")
+        final result = new LinkedHashMap<String,String>()
+        for( Map.Entry entry : (value as Map) ) {
+            final key = entry.key.toString()
+            final val = resolveCredential(entry.value, "properties.$key".toString())
+            if( val != null )
+                result.put(key, val)
+        }
+        return Collections.unmodifiableMap(result)
     }
 
     protected String urlToDriver(String url) {
@@ -103,8 +133,35 @@ class SqlDataSource {
         return result
     }
 
+    /**
+     * Opens a JDBC connection for this data source.
+     *
+     * When driver {@code properties} are configured, they are merged with the top-level
+     * {@code user}/{@code password} credentials into a single {@link Properties} instance
+     * -- with the top-level credentials taking precedence over same-named entries in
+     * {@code properties} -- and the connection is opened via the url + Properties + driver
+     * overload, because {@code groovy.sql.Sql.newInstance(Map)} does not allow both
+     * {@code properties} and {@code user}/{@code password} to be set at the same time.
+     * When no properties are configured, the existing map-based connection path is preserved.
+     *
+     * @return An open {@link Connection}
+     */
+    Connection getConnection() {
+        if( !properties )
+            return Sql.newInstance(toMap()).getConnection()
+
+        final props = new Properties()
+        props.putAll(properties)
+        if( user!=null )
+            props.setProperty('user', user)
+        if( password!=null )
+            props.setProperty('password', password)
+        return Sql.newInstance(url, props, driver).getConnection()
+    }
+
     @Override
     String toString() {
-        return "SqlDataSource[url=$url; driver=$driver; user=$user; password=${Bolts.redact(password)}]"
+        final redactedProps = properties?.collectEntries { k, v -> [k, Bolts.redact(v)] }
+        return "SqlDataSource[url=$url; driver=$driver; user=$user; password=${Bolts.redact(password)}; properties=$redactedProps]"
     }
 }

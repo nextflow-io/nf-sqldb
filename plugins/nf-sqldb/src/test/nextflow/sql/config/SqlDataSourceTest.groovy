@@ -158,4 +158,42 @@ class SqlDataSourceTest extends Specification {
         null         | null         | SqlDataSource.DEFAULT_USER| null
         ''           | ''           | SqlDataSource.DEFAULT_USER| null
     }
+    def 'should default properties to empty map' () {
+        given:
+        def ds = new SqlDataSource([:])
+        expect:
+        ds.properties == [:]
+    }
+
+    def 'should parse driver properties from config' () {
+        given:
+        def ds = new SqlDataSource([url:'x', driver:'y', properties: [ssl: 'true', ACCESS_MODE_DATA: 'r']])
+        expect:
+        ds.properties == [ssl: 'true', ACCESS_MODE_DATA: 'r']
+    }
+
+    def 'should inherit properties from fallback when not set' () {
+        given:
+        def fallback = new SqlDataSource([driver:'y', properties: [ssl: 'true']])
+        def ds = new SqlDataSource([url:'x', driver:'y'], fallback)
+        expect:
+        ds.properties == [ssl: 'true']
+    }
+
+    def 'should override fallback properties when set' () {
+        given:
+        def fallback = new SqlDataSource([driver:'y', properties: [ssl: 'true']])
+        def ds = new SqlDataSource([url:'x', driver:'y', properties: [ssl: 'false']], fallback)
+        expect:
+        ds.properties == [ssl: 'false']
+    }
+
+    def 'should redact secrets in string representation' () {
+        given:
+        def ds = new SqlDataSource([url:'x', driver:'y', password: 'secret-pass', properties: [password: 'secret-prop', ssl: 'true']])
+        expect:
+        !ds.toString().contains('secret-pass')
+        !ds.toString().contains('secret-prop')
+        ds.toString().contains('ssl')
+    }
 }
