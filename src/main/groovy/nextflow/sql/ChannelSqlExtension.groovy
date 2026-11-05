@@ -25,7 +25,6 @@ import groovyx.gpars.dataflow.DataflowWriteChannel
 import groovyx.gpars.dataflow.expression.DataflowExpression
 import nextflow.Channel
 import nextflow.Global
-import nextflow.NF
 import nextflow.Session
 import nextflow.extension.CH
 import nextflow.extension.DataflowHelper
@@ -104,12 +103,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
                 .withStatement(query)
                 .withTarget(channel)
                 .withOpts(opts)
-        if(NF.dsl2) {
-            session.addIgniter {-> handler.perform(true) }
-        }
-        else {
-            handler.perform(true)
-        }
+        session.addIgniter {-> handler.perform(true) }
         return channel
     }
 
