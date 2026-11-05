@@ -20,39 +20,55 @@ package nextflow.sql.config
 import groovy.transform.CompileStatic
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
+import nextflow.config.spec.ConfigScope
+import nextflow.config.spec.PlaceholderName
+import nextflow.config.spec.ScopeName
+import nextflow.script.dsl.Description
 
 /**
  * Model SQL dataSources configuration
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
+@ScopeName('sql')
+@Description('''
+    The `sql` scope allows you to configure the `nf-sqldb` plugin.
+''')
 @ToString(includePackage = false, includeNames = true)
 @EqualsAndHashCode(includeFields = true)
 @CompileStatic
-class SqlConfig {
+class SqlConfig implements ConfigScope {
 
-    private Map<String,SqlDataSource> dataSources
-    private SqlDataSource defSource
+    @PlaceholderName('<name>')
+    @Description('''
+        The databases that can be accessed by name. The `default` database provides fallback values for all other databases.
+    ''')
+    private Map<String,SqlDataSource> db
 
+    /* required by extension point -- do not remove */
+    SqlConfig() {}
+
+    /**
+     * @param config The `sql.db` config map
+     */
     SqlConfig(Map config) {
-        dataSources = parseDataSources(config)
+        db = parseDataSources(config)
     }
 
     SqlDataSource getDataSource(String name) {
         return name=='default'
-                ? defSource
-                : dataSources.get(name)
+                ? db.get(name) ?: SqlDataSource.DEFAULT
+                : db.get(name)
     }
 
     List<String> getDataSourceNames() {
-        return new ArrayList<String>(dataSources.keySet())
+        return new ArrayList<String>(db.keySet())
     }
 
-    protected Map parseDataSources(Map<String,Map> config) {
-        // create the `default`datasource as fallback for missing values
-        this.defSource = new SqlDataSource(config?.'default' as Map ?: Collections.emptyMap())
+    protected Map<String,SqlDataSource> parseDataSources(Map<String,Map> config) {
+        // the `default` datasource provides fallback values for the other datasources
+        final defSource = new SqlDataSource(config?.'default' as Map ?: Collections.emptyMap())
 
-        // setup other db by name
         final result = new LinkedHashMap<String,SqlDataSource>()
         for( Map.Entry<String,Map> entry : config ) {
             if( entry.key == 'default' ) {

@@ -14,7 +14,8 @@ nextflowPlugin {
     provider = 'nextflow'
     className = 'nextflow.sql.SqlPlugin'
     extensionPoints = [
-        'nextflow.sql.ChannelSqlExtension'
+        'nextflow.sql.ChannelSqlExtension',
+        'nextflow.sql.config.SqlConfig'
     ]
 }
 

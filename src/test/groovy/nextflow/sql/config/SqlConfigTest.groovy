@@ -17,6 +17,7 @@
 
 package nextflow.sql.config
 
+import nextflow.config.spec.SpecNode
 import spock.lang.Specification
 
 /**
@@ -139,5 +140,21 @@ class SqlConfigTest extends Specification {
         cfg1.hashCode() != cfg3.hashCode()
 
 
+    }
+
+    def 'should declare config spec' () {
+        when:
+        def scope = SpecNode.Scope.of(SqlConfig, '')
+        def db = scope.children().get('db') as SpecNode.Placeholder
+        then:
+        scope.children().keySet() == ['db'] as Set
+        db.placeholderName() == '<name>'
+        db.scope().children().keySet() == ['url', 'driver', 'user', 'password'] as Set
+        db.scope().children().values().every { it instanceof SpecNode.Option }
+    }
+
+    def 'should create config with no-arg constructor' () {
+        expect:
+        new SqlConfig()
     }
 }
