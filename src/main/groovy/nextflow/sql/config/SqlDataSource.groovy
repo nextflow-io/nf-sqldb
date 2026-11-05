@@ -19,7 +19,10 @@ package nextflow.sql.config
 
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
+import nextflow.config.spec.ConfigOption
+import nextflow.config.spec.ConfigScope
 import nextflow.extension.Bolts
+import nextflow.script.dsl.Description
 
 /**
  * Model a dataSource configuration
@@ -28,16 +31,38 @@ import nextflow.extension.Bolts
  */
 @ToString(includePackage = false, includeNames = true)
 @EqualsAndHashCode
-class SqlDataSource {
+class SqlDataSource implements ConfigScope {
     public static String DEFAULT_URL = 'jdbc:h2:mem:'
     public static String DEFAULT_DRIVER = 'org.h2.Driver'
     public static String DEFAULT_USER = 'sa'
 
-    static SqlDataSource DEFAULT = new SqlDataSource(Collections.emptyMap())
+    // static getter instead of field, otherwise the config spec would treat it as a nested scope
+    static SqlDataSource getDEFAULT() {
+        new SqlDataSource(Collections.emptyMap())
+    }
 
+    @ConfigOption
+    @Description('''
+        The database driver class name (optional).
+    ''')
     String driver
+
+    @ConfigOption
+    @Description('''
+        The database connection URL based on the [JDBC standard](https://docs.oracle.com/javase/tutorial/jdbc/basics/connecting.html#db_connection_url).
+    ''')
     String url
+
+    @ConfigOption
+    @Description('''
+        The database connection user name.
+    ''')
     String user
+
+    @ConfigOption
+    @Description('''
+        The database connection password.
+    ''')
     String password
 
     SqlDataSource(Map opts) {

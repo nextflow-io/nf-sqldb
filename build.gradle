@@ -9,13 +9,19 @@ group = 'io.nextflow'
 version = project.file('VERSION').text.trim()
 
 nextflowPlugin {
-    nextflowVersion = '25.04.0'
+    nextflowVersion = '25.10.0'
 
     provider = 'nextflow'
     className = 'nextflow.sql.SqlPlugin'
     extensionPoints = [
-        'nextflow.sql.ChannelSqlExtension'
+        'nextflow.sql.ChannelSqlExtension',
+        'nextflow.sql.config.SqlConfig'
     ]
+}
+
+// retain method parameter names in the plugin spec (remove once the Gradle plugin does this)
+tasks.withType(GroovyCompile).configureEach {
+    groovyOptions.parameters = true
 }
 
 configurations {
