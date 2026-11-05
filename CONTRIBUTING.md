@@ -10,6 +10,12 @@ Run the unit tests:
 make test
 ```
 
+Run the integration tests against real databases (Postgres, MySQL and MariaDB). This requires Docker:
+
+```bash
+make integration-test
+```
+
 Build and install the plugin to your local Nextflow installation:
 
 ```bash
