@@ -124,11 +124,9 @@ class QueryHandler implements QueryOp<QueryHandler> {
     }
 
     protected String normalize(String q) {
-        if( !q )
+        final result = q?.trim()
+        if( !result )
             throw new IllegalArgumentException("Missing query argument")
-        def result = q.trim()
-        if( !result.endsWith(';') )
-            result += ';'
         return result
     }
 
@@ -205,12 +203,13 @@ class QueryHandler implements QueryOp<QueryHandler> {
     }
 
     protected String makePaginationStm(String sql) {
-        if( sql.toUpperCase().contains('LIMIT') )
-                throw new IllegalArgumentException("Sql query should not include the LIMIT statement when pageSize is specified: $sql")
-        if( sql.toUpperCase().contains('OFFSET') )
+        if( sql =~ /(?i)\bLIMIT\b/ )
+            throw new IllegalArgumentException("Sql query should not include the LIMIT statement when pageSize is specified: $sql")
+        if( sql =~ /(?i)\bOFFSET\b/ )
             throw new IllegalArgumentException("Sql query should not include the OFFSET statement when pageSize is specified: $sql")
 
-        return sql.stripEnd(' ;') + " LIMIT ? OFFSET ?;"
+        // strip trailing semicolons and use a new line so that a trailing `--` comment can't swallow the clause
+        return sql.replaceFirst(/[\s;]+$/, '') + "\nLIMIT ? OFFSET ?"
     }
 
     protected emitColumns(ResultSet rs) {

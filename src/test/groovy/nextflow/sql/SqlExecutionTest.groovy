@@ -307,4 +307,26 @@ class SqlExecutionTest extends Specification {
         cleanup:
         sql?.close()
     }
-} 
+
+    def 'should execute statement with trailing semicolon'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+
+        when:
+        def createResult = sqlExtension.sqlExecute([db: 'test', statement: 'CREATE TABLE test_semi(id INT PRIMARY KEY);\n'])
+        def insertResult = sqlExtension.sqlExecute([db: 'test', statement: 'INSERT INTO test_semi VALUES (1);'])
+        then:
+        createResult.success == true
+        insertResult.success == true
+        insertResult.result == 1
+
+        cleanup:
+        sql?.close()
+    }
+}

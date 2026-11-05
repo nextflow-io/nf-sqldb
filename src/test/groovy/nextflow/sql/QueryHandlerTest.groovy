@@ -36,7 +36,15 @@ class QueryHandlerTest extends Specification {
 
         expect:
         ext.normalize('select * from x; ') == 'select * from x;'
-        ext.normalize('select * from x ')  == 'select * from x;'
+        ext.normalize('select * from x ')  == 'select * from x'
+        ext.normalize(' select * from x;\n') == 'select * from x;'
+        ext.normalize("select ';' from x") == "select ';' from x"
+        ext.normalize('BEGIN\n  UPDATE foo SET x = 1;\nEND;\n') == 'BEGIN\n  UPDATE foo SET x = 1;\nEND;'
+
+        when:
+        ext.normalize(' \n ')
+        then:
+        thrown(IllegalArgumentException)
     }
 
 
@@ -116,8 +124,13 @@ class QueryHandlerTest extends Specification {
         def ext = new QueryHandler()
         
         expect:
-        ext.makePaginationStm('select * from FOO')  == 'select * from FOO LIMIT ? OFFSET ?;'
-        ext.makePaginationStm('select * from FOO  ;  ')  == 'select * from FOO LIMIT ? OFFSET ?;'
+        ext.makePaginationStm('select * from FOO')  == 'select * from FOO\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select * from FOO  ;  ')  == 'select * from FOO\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select * from FOO;\n')  == 'select * from FOO\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select * from FOO;; ;')  == 'select * from FOO\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select * from FOO -- note')  == 'select * from FOO -- note\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select limits, offsets from FOO')  == 'select limits, offsets from FOO\nLIMIT ? OFFSET ?'
+        ext.makePaginationStm('select rate_limit from FOO')  == 'select rate_limit from FOO\nLIMIT ? OFFSET ?'
 
         when:
         ext.makePaginationStm('select * from offset')
@@ -128,6 +141,45 @@ class QueryHandlerTest extends Specification {
         ext.makePaginationStm('select * from limit')
         then:
         thrown(IllegalArgumentException)
+
+        when:
+        ext.makePaginationStm('select * from FOO limit 10')
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'should run paginated query with trailing semicolon or comment' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def ds = new SqlDataSource([url:JDBC_URL])
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table FOO(id int primary key, rate_limit int)')
+        for( int x : 1..7 )
+            sql.execute("insert into FOO (id, rate_limit) values (?,?)", [x, x*10])
+
+        when:
+        def result = new DataflowQueue()
+        def handler = new QueryHandler()
+                .withTarget(result)
+                .withStatement(QUERY)
+                .withDataSource(ds)
+                .withOpts(batchSize: 3)
+                .perform()
+        then:
+        handler.queryCount() == 3
+        result.length() == 8
+        result.getVal() == [1, 10]
+
+        cleanup:
+        sql?.close()
+
+        where:
+        QUERY << [
+            'select id, rate_limit from FOO order by id;',
+            'select id, rate_limit from FOO order by id;\n',
+            'select id, rate_limit from FOO order by id ;; ;\n',
+            'select id, rate_limit from FOO order by id -- trailing comment',
+        ]
     }
 
     def 'should test paginated query' () {
