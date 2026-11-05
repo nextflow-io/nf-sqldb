@@ -12,6 +12,7 @@ See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to
 - Don't append a trailing semicolon to queries and statements, which Trino and other JDBC drivers reject (#16)
 - Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment
 - Don't reject paginated queries whose identifiers merely contain `limit` or `offset` (e.g. `rate_limit`)
+- Fix `sqlExecute` returning a row count instead of `null` for multi-line DDL statements
 
 ## [0.7.1] - 2025-08-21
 
