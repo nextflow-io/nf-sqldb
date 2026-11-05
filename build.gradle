@@ -119,6 +119,11 @@ dependencies {
     integrationTestImplementation 'org.testcontainers:testcontainers-mysql:2.0.5'
 }
 
+// same as compileTestGroovy: the Nextflow plugin writes the extension index and spec into the main resources
+tasks.named('compileIntegrationTestGroovy') {
+    dependsOn 'extensionPoints', 'generateSpec'
+}
+
 tasks.register('integrationTest', Test) {
     description = 'Runs the integration tests against real databases (requires Docker).'
     group = 'verification'
