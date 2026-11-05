@@ -49,7 +49,7 @@ class InsertHandlerTest extends Specification {
 
     def 'should fetch columns names from db' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def ds = new SqlDataSource([url:JDBC_URL])
@@ -59,11 +59,13 @@ class InsertHandlerTest extends Specification {
         then:
         handler.getSqlStatement([]) == 'insert into FOO ( ID,ALPHA,OMEGA ) values ( ?,?,? )'
 
+        cleanup:
+        handler?.close()
     }
 
     def 'should insert data into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
@@ -84,11 +86,14 @@ class InsertHandlerTest extends Specification {
         result.id == [1,2,3]
         result.alpha == ['Hello world','Hola mundo','Ciao mondo']
         result.omega == [100,200,300]
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should insert single value into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -107,11 +112,14 @@ class InsertHandlerTest extends Specification {
         result.size() == 3
         and:
         result.id == [1,2,3]
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should insert map into table' () {
         given:
-        def JDBC_URL = 'jdbc:h2:mem:test_' + Random.newInstance().nextInt(10_000)
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def TABLE = 'create table FOO(id int primary key, alpha varchar(255), omega int);'
         and:
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -131,6 +139,9 @@ class InsertHandlerTest extends Specification {
         and:
         result.id == [1,2,3]
         result.alpha == ['Hola', 'Ciao', 'Hello']
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should insert map with inferred columns ignoring case' () {
