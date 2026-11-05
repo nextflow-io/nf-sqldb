@@ -43,7 +43,7 @@ class SqlDataSource implements ConfigScope {
 
     @ConfigOption
     @Description('''
-        The database driver class name (optional).
+        The database driver class name (optional). If not specified, it is inferred from the JDBC URL for supported databases.
     ''')
     String driver
 
@@ -107,7 +107,6 @@ class SqlDataSource implements ConfigScope {
                 "1. The secret is defined in your workspace/user secrets\n" +
                 "2. The secret name matches exactly (case-sensitive)\n" +
                 "3. You have proper permissions to access the secret\n" +
-                "4. The Nextflow version supports secrets integration (>=25.04.0)\n" +
                 "See: https://www.nextflow.io/docs/latest/secrets.html"
             )
         }

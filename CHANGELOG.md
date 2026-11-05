@@ -2,10 +2,16 @@
 
 All notable changes to the nf-sqldb plugin will be documented here.
 
-See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how to structure this file.
 
 ## Unreleased
 
+- Migrate build to the Nextflow Gradle plugin (#42)
+- Require Nextflow 25.10.0 or later (#43)
+- Generate the plugin spec, including the `sql` config scope (#43)
+- Remove DSL1 support (#41)
+- Run integration tests against Postgres and MySQL (#11)
+- `sqlInsert` now works with DuckDB, which supports batch inserts as of `duckdb_jdbc` 1.3.0.0 (#19)
 - Fix `sqlInsert` with inferred columns to match table and column names ignoring case (e.g. Postgres and MySQL lower-case columns, `into: 'FOO'` on Postgres)
 - Reject `sqlInsert` map records with keys that differ only by case
 - Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
@@ -22,7 +28,10 @@ See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to
 
 ## [0.7.0] - 2025-05-28
 
-- Add `sqlExecutor` and other minor improvements [072ae039]
+- Add `sqlExecute` and other minor improvements [072ae039]
+- Bump postgresql:42.7.5
+- Bump sqlite-jdbc:3.49.1.0
+- Bump duckdb_jdbc:1.3.0.0
 
 ## [0.6.0] - 2025-05-23
 
@@ -56,7 +65,7 @@ See [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to
 
 - Add support for batch inserts
 - Add support for insert operation setup statement to create missing table(s)
-- Add support fot SQLite
+- Add support for SQLite
 - Add support for DuckDB
 
 ## [0.1.0] - 2021-09-01

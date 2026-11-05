@@ -4,7 +4,7 @@ For production deployments, it's recommended to use Nextflow secrets instead of 
 
 ## Configuration with Secrets
 
-When using [Nextflow secrets](https://www.nextflow.io/docs/latest/secrets.html) (available in Nextflow 25.04.0+), you can reference workspace or user-level secrets in your database configuration:
+When using [Nextflow secrets](https://www.nextflow.io/docs/latest/secrets.html), you can reference workspace or user-level secrets in your database configuration:
 
 ```groovy
 sql {
@@ -31,7 +31,6 @@ If you encounter authentication errors like "Missing credentials error", verify:
 
 - **Secret Names**: Ensure secret names in your configuration match exactly (case-sensitive)
 - **Permissions**: Verify you have access to workspace secrets or have defined user-level secrets
-- **Nextflow Version**: Secrets require Nextflow >=25.04.0
 - **Secret Values**: Ensure secrets contain valid credentials (no empty values)
 
 Common error patterns:
