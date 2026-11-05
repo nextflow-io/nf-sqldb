@@ -19,6 +19,11 @@ nextflowPlugin {
     ]
 }
 
+// retain method parameter names in the plugin spec (remove once the Gradle plugin does this)
+tasks.withType(GroovyCompile).configureEach {
+    groovyOptions.parameters = true
+}
+
 configurations {
     runtimeClasspath.exclude group: 'org.slf4j', module: 'slf4j-api'
 }
