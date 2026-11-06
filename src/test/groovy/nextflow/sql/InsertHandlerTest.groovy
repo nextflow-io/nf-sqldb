@@ -17,8 +17,14 @@
 
 package nextflow.sql
 
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.DatabaseMetaData
+import java.sql.DriverManager
+import java.sql.SQLFeatureNotSupportedException
 import java.sql.Types
 
 import groovy.sql.Sql
@@ -66,6 +72,33 @@ class InsertHandlerTest extends Specification {
 
         cleanup:
         handler?.close()
+    }
+
+    def 'should insert batches if the driver does not support transactions' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table FOO(id int primary key)')
+        and: 'a connection that rejects transactions, like Databricks'
+        def conn = DriverManager.getConnection(JDBC_URL, 'sa', null)
+        def noTx = (Connection) Proxy.newProxyInstance(Connection.classLoader, [Connection] as Class[], { proxy, Method m, Object[] args ->
+            if( m.name == 'setAutoCommit' && args[0] == false || m.name in ['commit', 'rollback'] )
+                throw new SQLFeatureNotSupportedException(m.name)
+            try { return m.invoke(conn, args) }
+            catch( InvocationTargetException e ) { throw e.cause }
+        } as InvocationHandler)
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'FOO', columns: 'id', batchSize: 2])
+        handler.@connection = noTx
+
+        when:
+        (1..5).each { handler.perform([it]) }
+        handler.close()
+        then:
+        sql.firstRow('select count(*) as cnt from FOO').cnt == 5
+
+        cleanup:
+        sql?.close()
     }
 
     def 'should insert data into table' () {
