@@ -30,6 +30,7 @@ import nextflow.Channel
 import nextflow.Global
 import nextflow.Session
 import nextflow.extension.CH
+import nextflow.util.HashBag
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -402,6 +403,21 @@ class SqlExecutionTest extends Specification {
         expect:
         ext.sqlExecute(db: 'test', statement: 'INSERT INTO b4 (id, "n:x") VALUES (?, ?)', batch: [[1, 'a'], [2, 'b']]) == [success: true, result: 2]
         sql.rows('SELECT "n:x" AS n FROM b4 ORDER BY id').collect { it.n } == ['a', 'b']
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should accept any collection as batch'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b6(id INT PRIMARY KEY)')
+        def ext = extension(JDBC_URL)
+
+        expect: 'a bag, as emitted by collect under static typing'
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO b6 (id) VALUES (:id)', batch: new HashBag([[id: 1], [id: 2]])) == [success: true, result: 2]
+        sql.firstRow('SELECT COUNT(*) AS n FROM b6').n == 2
 
         cleanup:
         sql?.close()

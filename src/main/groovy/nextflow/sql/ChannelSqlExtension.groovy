@@ -233,7 +233,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             return [success: false, error: "Options 'params' and 'batch' cannot be used together"]
         if (opts.params != null && !(opts.params instanceof List || opts.params instanceof Map))
             return [success: false, error: "Option 'params' must be a list or a map"]
-        if (opts.batch != null && opts.batch !instanceof List)
+        if (opts.batch != null && opts.batch !instanceof Collection)
             return [success: false, error: "Option 'batch' must be a list"]
             
         final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
@@ -253,7 +253,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             final normalizedStatement = statement.trim()
             final isDDL = normalizedStatement ==~ /(?is)(create|alter|drop|truncate)\b.*/
             final rowsAffected = opts.batch != null
-                ? executeBatch(sql, normalizedStatement, opts.batch as List)
+                ? executeBatch(sql, normalizedStatement, toList(opts.batch as Collection))
                 : executeStatement(sql, normalizedStatement, opts.params, isDDL)
             return [success: true, result: isDDL ? null : rowsAffected]
         }
@@ -271,6 +271,14 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             return null
         }
         return bound != null ? sql.executeUpdate(bound.sql, bound.params) : sql.executeUpdate(statement)
+    }
+
+    // copy by iterating, since some collections don't support toArray (e.g. the bag emitted by collect)
+    private static List toList(Collection items) {
+        final result = new ArrayList(items.size())
+        for( final item : items )
+            result.add(item)
+        return result
     }
 
     /**
