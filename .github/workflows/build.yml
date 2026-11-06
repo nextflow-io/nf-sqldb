@@ -51,6 +51,9 @@ jobs:
       - name: Install
         run: make install
 
+      - name: Lint examples
+        run: nextflow lint examples/
+
       - name: Test
         run: nextflow run examples/sql-execution -plugins nf-sqldb@$(cat VERSION)
 
