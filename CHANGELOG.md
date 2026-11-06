@@ -6,6 +6,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 
 ## Unreleased
 
+- Add release workflow (#49)
 - Migrate build to the Nextflow Gradle plugin (#42)
 - Require Nextflow 26.04.0 or later, for record support in `sqlQuery` (#43)
 - Plugins that depend on nf-sqldb (via its Maven artifact) must also require Nextflow 26.04.0 or later when upgrading. Version 0.7.1 is the last release that supports older Nextflow versions (25.04 or later)
