@@ -508,6 +508,53 @@ class RealDatabaseTest extends Specification {
         row.n == [[1, 2], [3, 4]]
     }
 
+    def 'should reuse the connection unless a call fails on #db'() {
+        given:
+        createTable(db, 'reuse1', 'id int primary key')
+        def ext = extension(db)
+        def connectionId = { ->
+            ext.sqlQuery(query: "select ${db == mysql ? 'connection_id()' : 'pg_backend_pid()'} as cid".toString()).first().cid
+        }
+
+        when:
+        def first = connectionId()
+        def inserted = ext.sqlExecute(statement: 'insert into reuse1 values (1)')
+        def second = connectionId()
+        def failed = ext.sqlExecute(statement: 'insert into reuse1 values (1)')
+        def third = connectionId()
+
+        then:
+        inserted.success
+        !failed.success
+        first == second
+        third != second
+        ext.sqlQuery(query: 'select id from reuse1') == [[id: 1]]
+
+        cleanup:
+        ext?.close()
+
+        where:
+        db << databases
+    }
+
+    def 'should not reuse the connection of a failed transaction on postgres'() {
+        given:
+        createTable(postgres, 'reuse2', 'id int primary key')
+        def ext = extension(postgres)
+
+        when:
+        def failed = ext.sqlExecute(statement: 'BEGIN; INSERT INTO reuse2 VALUES (1); INSERT INTO reuse2 VALUES (1)')
+        def inserted = ext.sqlExecute(statement: 'INSERT INTO reuse2 VALUES (2)')
+
+        then:
+        !failed.success
+        inserted.success
+        sql.rows('select id from reuse2') == [[id: 2]]
+
+        cleanup:
+        ext?.close()
+    }
+
     private ChannelSqlExtension extension(Database db) {
         final ds = db.dataSource
         final session = Mock(Session) {
