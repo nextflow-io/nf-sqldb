@@ -14,6 +14,9 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - `sqlInsert` now works with DuckDB, which supports batch inserts as of `duckdb_jdbc` 1.3.0.0 (#19)
 - Fix `sqlInsert` with inferred columns to match table and column names ignoring case (e.g. Postgres and MySQL lower-case columns, `into: 'FOO'` on Postgres)
 - Reject `sqlInsert` map records with keys that differ only by case
+- Fix `sqlInsert` with inferred columns merging the columns of same-named tables in other schemas or MySQL databases; unqualified table names are looked up in the current schema first (#44)
+- Support qualified `sqlInsert` table names (e.g. `into: 'myschema.mytable'`, `mydb.mytable` on MySQL, or an attached database on DuckDB) with inferred columns (#44)
+- Fix `sqlInsert` with inferred columns treating `_` and `%` in table names as wildcards (#44)
 - Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
 - Don't append a trailing semicolon to queries and statements, which Trino and other JDBC drivers reject (#16)
 - Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment

@@ -138,6 +138,62 @@ class EmbeddedInsertHandlerTest extends Specification {
         driver << ['sqlite', 'duckdb']
     }
 
+    def 'should not treat underscore in table name as a wildcard on #driver'() {
+        given:
+        def ds = createTable(driver, 'id int primary key')
+        sql.execute('create table w_1(id int primary key)')
+        sql.execute('create table wx1(other int)')
+        handler = new InsertHandler(ds, [into: 'w_1'])
+
+        when:
+        handler.perform([1])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == 'insert into w_1 ( id ) values ( ? )'
+        sql.rows('select id from w_1').id == [1]
+
+        where:
+        driver << ['sqlite', 'duckdb']
+    }
+
+    def 'should infer columns of #into on duckdb'() {
+        given:
+        def ds = createTable('duckdb', 'id int primary key, alpha varchar(255)')
+        sql.execute('create schema s1')
+        sql.execute('create table s1.foo(id int primary key, beta varchar(255))')
+        handler = new InsertHandler(ds, [into: into])
+
+        when:
+        handler.perform([1, 'x'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $into ( id,$column ) values ( ?,? )"
+        sql.rows("select id, $column as v from $into".toString()).collect { [it.id, it.v] } == [[1, 'x']]
+
+        where:
+        into     | column
+        'foo'    | 'alpha'
+        's1.foo' | 'beta'
+    }
+
+    def 'should infer columns of a table in an attached database on duckdb'() {
+        given:
+        def other = tempDir.resolve('other.db')
+        def otherSql = Sql.newInstance("jdbc:duckdb:$other".toString())
+        otherSql.execute('create table t(id int primary key, beta varchar(255))')
+        otherSql.close()
+        def ds = createTable('duckdb', 'id int primary key, alpha varchar(255)')
+        sql.execute('create table t(id int primary key, gamma varchar(255))')
+        handler = new InsertHandler(ds, [into: 'other.t', setup: "attach '$other' as other".toString()])
+
+        when:
+        handler.perform([1, 'x'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == 'insert into other.t ( id,beta ) values ( ?,? )'
+        sql.rows('select id, beta from other.t').collect { [it.id, it.beta] } == [[1, 'x']]
+    }
+
     // DuckDB reports that it stores mixed-case identifiers, but table lookups in its metadata are case-sensitive
     @PendingFeature
     def 'should infer columns with upper-case table name on duckdb'() {

@@ -17,8 +17,13 @@
 
 package nextflow.sql
 
+import java.sql.Connection
+import java.sql.DatabaseMetaData
+import java.sql.Types
+
 import groovy.sql.Sql
 import nextflow.sql.config.SqlDataSource
+import org.h2.tools.SimpleResultSet
 import spock.lang.Specification
 
 /**
@@ -307,6 +312,157 @@ class InsertHandlerTest extends Specification {
         cleanup:
         handler?.close()
         sql?.close()
+    }
+
+    def 'should infer columns only from the table in the current schema' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create schema s1')
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        sql.execute('create table s1.foo(id int primary key, beta varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform(RECORD)
+        handler.close()
+        then:
+        handler.getSqlStatement(RECORD) == 'insert into foo ( ID,ALPHA ) values ( ?,? )'
+        sql.rows('select id, alpha from foo').collect { [it.id, it.alpha] } == [[1, 'a']]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        RECORD << [[1, 'a'], [id: 1, alpha: 'a']]
+    }
+
+    def 'should infer columns of schema-qualified table #TABLE' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create schema s1')
+        sql.execute('create table foo(id int primary key, alpha varchar(255))')
+        sql.execute('create table s1.foo(id int primary key, beta varchar(255))')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([1, 'b'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $TABLE ( ID,BETA ) values ( ?,? )"
+        sql.rows('select id, beta from s1.foo').collect { [it.id, it.beta] } == [[1, 'b']]
+        sql.rows('select id from foo') == []
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        TABLE << ['s1.foo', 'S1.FOO']
+    }
+
+    def 'should not treat underscore in table name as a wildcard' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table w_1(id int primary key)')
+        sql.execute('create table wx1(other int)')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'w_1'])
+
+        when:
+        handler.perform([1])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == 'insert into w_1 ( ID ) values ( ? )'
+        sql.rows('select id from w_1').id == [1]
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should reject an unqualified table that is only found in multiple other schemas' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create schema s1')
+        sql.execute('create schema s2')
+        sql.execute('create table s1.foo(id int primary key)')
+        sql.execute('create table s2.foo(id int primary key)')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: 'foo'])
+
+        when:
+        handler.perform([1])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.startsWith("Ambiguous sqlInsert table 'foo'")
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+    }
+
+    def 'should match the table name exactly when the driver does not escape wildcards' () {
+        given:
+        def rs = { ->
+            def result = new SimpleResultSet()
+            ['TABLE_CAT', 'TABLE_SCHEM', 'TABLE_NAME', 'COLUMN_NAME'].each { result.addColumn(it, Types.VARCHAR, 255, 0) }
+            result.addRow(null, null, 'w_1', 'id')
+            result.addRow(null, null, 'wx1', 'other')
+            return result
+        }
+        def metaData = Stub(DatabaseMetaData) {
+            getSearchStringEscape() >> ''
+            getColumns(*_) >> { rs() }
+        }
+        def handler = new InsertHandler(new SqlDataSource([url: 'jdbc:h2:mem:test']), [into: 'w_1'])
+        handler.@connection = Stub(Connection) { getMetaData() >> metaData }
+
+        expect:
+        handler.fetchColNames0('w_1') == ['id']
+    }
+
+    def 'should not infer columns of invalid table name #TABLE' () {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('create table foo(id int primary key)')
+        and:
+        def handler = new InsertHandler(new SqlDataSource([url:JDBC_URL]), [into: TABLE])
+
+        when:
+        handler.perform([1])
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message == "Missing sqlInsert 'columns' option"
+
+        cleanup:
+        handler?.close()
+        sql?.close()
+
+        where:
+        TABLE << ['public..foo', 'a.b.public.foo', '.foo']
+    }
+
+    def 'should escape metadata search pattern' () {
+        expect:
+        InsertHandler.escapePattern(NAME, ESCAPE) == EXPECTED
+
+        where:
+        NAME        | ESCAPE | EXPECTED
+        null        | '\\'   | null
+        'foo'       | '\\'   | 'foo'
+        'w_1'       | '\\'   | 'w\\_1'
+        'w%1'       | '\\'   | 'w\\%1'
+        'w\\_1'     | '\\'   | 'w\\\\\\_1'
+        'w_1'       | null   | 'w_1'
+        'w_1'       | ''     | 'w_1'
     }
 
 }

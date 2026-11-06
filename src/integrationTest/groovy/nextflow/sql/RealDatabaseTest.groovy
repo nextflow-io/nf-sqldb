@@ -274,6 +274,99 @@ class RealDatabaseTest extends Specification {
         mysql    | 'insert4'
     }
 
+    private void createSchemaTables(Database db, String schema, String table) {
+        sql = db.connect()
+        if( db == mysql ) {
+            // MySQL schemas are databases, which only root can create
+            final root = Sql.newInstance(db.container.jdbcUrl, 'root', db.container.password)
+            root.execute("drop database if exists $schema".toString())
+            root.execute("create database $schema".toString())
+            root.execute("grant all on ${schema}.* to '${db.container.username}'@'%'".toString())
+            root.close()
+        }
+        else {
+            sql.execute("drop schema if exists $schema cascade".toString())
+            sql.execute("create schema $schema".toString())
+        }
+        sql.execute("drop table if exists $table".toString())
+        sql.execute("create table $table(id int primary key, alpha varchar(255))".toString())
+        sql.execute("create table ${schema}.${table}(id int primary key, beta varchar(255))".toString())
+    }
+
+    def 'should infer columns only from the table in the current schema on #db'() {
+        given:
+        createSchemaTables(db, 'schema9', 'insert9')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'insert9'])
+        handler.perform(record)
+        handler.close()
+        then:
+        handler.getSqlStatement(record) == 'insert into insert9 ( id,alpha ) values ( ?,? )'
+        sql.rows('select id, alpha from insert9').collect { [it.id, it.alpha] } == [[1, 'a']]
+
+        where:
+        db       | record
+        postgres | [1, 'a']
+        postgres | [id: 1, alpha: 'a']
+        mysql    | [1, 'a']
+        mysql    | [id: 1, alpha: 'a']
+    }
+
+    def 'should infer columns of schema-qualified table #into on #db'() {
+        given:
+        createSchemaTables(db, 'schema10', 'insert10')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: into])
+        handler.perform([1, 'b'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == "insert into $into ( id,beta ) values ( ?,? )"
+        sql.rows('select id, beta from schema10.insert10').collect { [it.id, it.beta] } == [[1, 'b']]
+        sql.rows('select id from insert10') == []
+
+        where:
+        db       | into
+        postgres | 'schema10.insert10'
+        postgres | 'SCHEMA10.INSERT10'
+        mysql    | 'schema10.insert10'
+    }
+
+    def 'should infer columns of a table outside the current schema in the search path on postgres'() {
+        given:
+        createSchemaTables(postgres, 'schema11', 'insert11')
+        sql.execute('drop table schema11.insert11')
+        def url = postgres.container.jdbcUrl + '&currentSchema=schema11,public'
+        def ds = new SqlDataSource([url: url, user: postgres.container.username, password: postgres.container.password])
+
+        when:
+        def handler = new InsertHandler(ds, [into: 'insert11'])
+        handler.perform([1, 'a'])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == 'insert into insert11 ( id,alpha ) values ( ?,? )'
+        sql.rows('select id, alpha from public.insert11').collect { [it.id, it.alpha] } == [[1, 'a']]
+    }
+
+    def 'should not treat underscore in table name as a wildcard on #db'() {
+        given:
+        createTable(db, 'w_12', 'id int primary key')
+        sql.execute('drop table if exists wx12')
+        sql.execute('create table wx12(other int)')
+
+        when:
+        def handler = new InsertHandler(db.dataSource, [into: 'w_12'])
+        handler.perform([1])
+        handler.close()
+        then:
+        handler.getSqlStatement([]) == 'insert into w_12 ( id ) values ( ? )'
+        sql.rows('select id from w_12').id == [1]
+
+        where:
+        db << databases
+    }
+
     def 'should insert rows in batches on #db'() {
         given:
         createTable(db, 'insert5', 'id int primary key, alpha varchar(255)')
