@@ -222,7 +222,7 @@ class InsertHandler implements Closeable {
                 // reset the current batch count
                 batchCount = 0
                 // make sure to commit the current batch
-                connection.commit()
+                safeCommit(connection)
             }
         }
     }
