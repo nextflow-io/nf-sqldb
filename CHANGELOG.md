@@ -33,6 +33,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
 - Accept any collection for the `sqlExecute` `batch` option, such as the output of `collect` under static typing
 - Don't print a duplicate groovy-sql warning to stderr when a `sqlExecute` or `sqlQuery` statement fails
+- Remove Windows native libraries from the bundled DuckDB and SQLite drivers, which aren't used by Nextflow, to reduce the plugin size
 
 ## [0.7.1] - 2025-08-21
 
