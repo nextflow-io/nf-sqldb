@@ -33,7 +33,7 @@ import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Timeout
 import test.Dsl2Spec
-import test.helpers.MockScriptRunner
+import test.ScriptHelper
 
 import java.nio.file.Path
 
@@ -100,12 +100,14 @@ class SqlDslTest extends Dsl2Spec {
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            def table = 'FOO'
-            def sql = "select * from $table"
-            channel.fromQuery(sql, db: "test") 
+            workflow {
+                def table = 'FOO'
+                def sql = "select * from $table"
+                channel.fromQuery(sql, db: "test") 
+            }
             '''
         and:
-        def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+        def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
         result.val == [1, 'hola', 10]
         result.val == [2, 'ciao', 20]
@@ -129,12 +131,14 @@ class SqlDslTest extends Dsl2Spec {
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            channel
-              .of(100,200,300)
-              .sqlInsert(into:"FOO", columns:'id', db:"ds1")
+            workflow {
+                channel
+                  .of(100,200,300)
+                  .sqlInsert(into:"FOO", columns:'id', db:"ds1")
+            }
             '''
         and:
-        def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+        def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
         result.val == 100
         result.val == 200
@@ -162,12 +166,14 @@ class SqlDslTest extends Dsl2Spec {
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            channel
-              .of(100,200,300,400,500)
-              .sqlInsert(into:'FOO', columns:'id', db:'ds1', batchSize: 2)
+            workflow {
+                channel
+                  .of(100,200,300,400,500)
+                  .sqlInsert(into:'FOO', columns:'id', db:'ds1', batchSize: 2)
+            }
             '''
         and:
-        def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+        def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
         result.val == 100
         result.val == 200
@@ -200,12 +206,14 @@ class SqlDslTest extends Dsl2Spec {
         when:
         def SCRIPT = '''
             include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            def table = 'FOO'
-            def sql = "select * from $table"
-            channel.fromQuery(sql, db: "test", emitColumns:true) 
+            workflow {
+                def table = 'FOO'
+                def sql = "select * from $table"
+                channel.fromQuery(sql, db: "test", emitColumns:true) 
+            }
             '''
         and:
-        def result = new MockScriptRunner(config).setScript(SCRIPT).execute()
+        def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
         result.val == ['ID', 'ALPHA', 'OMEGA']
         result.val == [1, 'hola', 10]
@@ -241,11 +249,13 @@ class SqlDslTest extends Dsl2Spec {
         when:
         def SCRIPT = """
             include { fromQuery } from 'plugin/nf-sqldb'
-            def sql = \"\"\"SELECT * FROM \"sra-glue-db\".metadata WHERE organism = 'Mycobacterium tuberculosis' AND bioproject = 'PRJNA670836' LIMIT 1;\"\"\"
-            channel.fromQuery(sql, db: "awsathena").view()
+            workflow {
+                def sql = \"\"\"SELECT * FROM \"sra-glue-db\".metadata WHERE organism = 'Mycobacterium tuberculosis' AND bioproject = 'PRJNA670836' LIMIT 1;\"\"\"
+                channel.fromQuery(sql, db: "awsathena").view()
+            }
             """
         then:
-        new MockScriptRunner(config).setScript(SCRIPT).execute()
+        ScriptHelper.runScript(SCRIPT, config: config)
 
     }
 

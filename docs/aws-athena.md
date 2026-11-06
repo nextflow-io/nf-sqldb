@@ -44,14 +44,14 @@ Execute the following Nextflow pipeline:
 ```nextflow
 include { fromQuery } from 'plugin/nf-sqldb'
 
-def sqlQuery = """
+def query = """
     SELECT *
     FROM \"${params.aws_glue_db}\".${params.aws_glue_db_table}
     WHERE organism = 'Mycobacterium tuberculosis'
     LIMIT 10;
     """
 
-channel.fromQuery(sqlQuery, db: 'athena').view()
+channel.fromQuery(query, db: 'athena').view()
 ```
 
 ### Output

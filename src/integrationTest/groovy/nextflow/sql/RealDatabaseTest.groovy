@@ -22,6 +22,7 @@ import groovyx.gpars.dataflow.DataflowQueue
 import nextflow.Channel
 import nextflow.Global
 import nextflow.Session
+import nextflow.script.types.Record
 import nextflow.sql.config.SqlDataSource
 import org.testcontainers.containers.JdbcDatabaseContainer
 import org.testcontainers.mysql.MySQLContainer
@@ -438,6 +439,73 @@ class RealDatabaseTest extends Specification {
 
         where:
         db << databases
+    }
+
+    def 'should query rows as records on #db'() {
+        given:
+        createTable(db, 'query4', 'id int primary key, alpha varchar(255), omega int')
+        sql.execute("insert into query4(id, alpha, omega) values (1, 'a', 10), (2, 'b', 20), (3, 'c', 30)")
+        def ext = extension(db)
+
+        when:
+        def rows = ext.sqlQuery(query: 'select omega, id, alpha from query4 where omega > ? order by id', params: [15])
+
+        then:
+        rows == [[omega: 20, id: 2, alpha: 'b'], [omega: 30, id: 3, alpha: 'c']]
+        rows.every { it instanceof Record }
+        rows[0].keySet().toList() == ['omega', 'id', 'alpha']
+
+        and:
+        ext.sqlQuery(query: 'select alpha from query4 where id = :id', params: [id: 1]) == [[alpha: 'a']]
+        ext.sqlQuery(query: 'select alpha from query4 where id < 0') == []
+
+        where:
+        db << databases
+    }
+
+    def 'should keep column labels as reported on #db'() {
+        given:
+        createTable(db, 'query5', 'id int primary key, alpha varchar(255)')
+        sql.execute("insert into query5(id, alpha) values (1, 'a')")
+        def ext = extension(db)
+        def q = db == mysql ? '`' : '"'
+
+        expect:
+        ext.sqlQuery(query: "select id, ALPHA, id as ${q}MixedCase${q}, id as ${q}UPPER${q} from query5".toString()).first().keySet().toList() == KEYS[db.name]
+
+        where:
+        db << databases
+        // Postgres folds unquoted identifiers to lower case, MySQL returns the labels as written
+        KEYS = [postgres: ['id', 'alpha', 'MixedCase', 'UPPER'], mysql: ['id', 'ALPHA', 'MixedCase', 'UPPER']]
+    }
+
+    def 'should read rows written by sqlExecute on #db'() {
+        given:
+        createTable(db, 'query6', 'id int primary key, alpha varchar(255)')
+        def ext = extension(db)
+
+        expect:
+        ext.sqlExecute(statement: 'insert into query6(id, alpha) values (?, ?)', batch: [[1, 'a'], [2, 'b']]).success
+        ext.sqlQuery(query: 'select id, alpha from query6 order by id') == [[id: 1, alpha: 'a'], [id: 2, alpha: 'b']]
+
+        where:
+        db << databases
+    }
+
+    def 'should materialize arrays, text and bytea on postgres'() {
+        given:
+        createTable(postgres, 'query7', 'id int primary key, t text, b bytea, a int[], n int[][]')
+        sql.execute("insert into query7 values (1, 'some text', '\\x010203', '{1,2,3}', '{{1,2},{3,4}}')")
+        def ext = extension(postgres)
+
+        when:
+        def row = ext.sqlQuery(query: 'select t, b, a, n from query7').first()
+
+        then:
+        row.t == 'some text'
+        row.b == [1, 2, 3] as byte[]
+        row.a == [1, 2, 3]
+        row.n == [[1, 2], [3, 4]]
     }
 
     private ChannelSqlExtension extension(Database db) {

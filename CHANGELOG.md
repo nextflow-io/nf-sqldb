@@ -7,7 +7,8 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 ## Unreleased
 
 - Migrate build to the Nextflow Gradle plugin (#42)
-- Require Nextflow 25.10.0 or later (#43)
+- Require Nextflow 26.04.0 or later, for record support in `sqlQuery` (#43)
+- Plugins that depend on nf-sqldb (via its Maven artifact) must also require Nextflow 26.04.0 or later when upgrading. Version 0.7.1 is the last release that supports older Nextflow versions (25.04 or later)
 - Generate the plugin spec, including the `sql` config scope (#43)
 - Remove DSL1 support (#41)
 - Run integration tests against Postgres and MySQL (#11)
@@ -26,6 +27,8 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Add the `params` option to `sqlExecute` for bind parameters, as a list for positional `?` placeholders or a map for named `:name` placeholders (#22)
 - Add the `batch` option to `sqlExecute` to execute a statement for many sets of bind parameters in a single transaction
 - Deprecate `sqlInsert`, which is not supported with static typing, in favor of `sqlExecute` with `params` or `batch`
+- Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports bind parameters and static typing (#22, #23)
+- Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
 
 ## [0.7.1] - 2025-08-21
 

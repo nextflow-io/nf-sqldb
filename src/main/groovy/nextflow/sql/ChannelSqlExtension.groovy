@@ -18,6 +18,14 @@
 package nextflow.sql
 
 
+import java.sql.Blob
+import java.sql.Clob
+import java.sql.DatabaseMetaData
+import java.sql.ResultSet
+import java.sql.SQLException
+import java.sql.SQLFeatureNotSupportedException
+import java.sql.SQLXML
+
 import groovy.sql.BatchingPreparedStatementWrapper
 import groovy.transform.CompileStatic
 import groovy.transform.PackageScope
@@ -35,12 +43,12 @@ import nextflow.plugin.extension.Function
 import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.script.dsl.Description
+import nextflow.script.types.Record
 import nextflow.sql.config.SqlConfig
 import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
+import nextflow.util.RecordMap
 import java.sql.Connection
-import java.sql.SQLException
-import java.sql.SQLFeatureNotSupportedException
 import java.sql.Statement
 import java.util.concurrent.ConcurrentHashMap
 import groovy.sql.Sql
@@ -135,8 +143,12 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         return channel
     }
 
+    private static String dbNameFromOpts(Map opts) {
+        return (opts?.db ?: 'default') as String
+    }
+
     protected SqlDataSource dataSourceFromOpts(Map opts) {
-        final dsName = (opts?.db ?: 'default') as String
+        final dsName = dbNameFromOpts(opts)
         final dataSource = track(config.getDataSource(dsName))
         if( dataSource==null ) {
             def msg = "Unknown db name: $dsName"
@@ -324,6 +336,139 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             return true
         }
         catch (SQLFeatureNotSupportedException e) {
+            return false
+        }
+    }
+
+    private static final Map SQL_QUERY_PARAMS = [
+            db: CharSequence,
+            query: CharSequence,
+            params: [List, Map]
+    ]
+
+    @Description('''
+        The `sqlQuery` function queries a SQL database and returns a list of records, one for each row in the result set. Each record maps the column labels to the row values, in column order. If the database stores unquoted identifiers in upper case (e.g. H2, Oracle), upper-case labels are converted to lower case, so that `SELECT id ...` gives `row.id` on any database.
+
+        The whole result set is read into memory. Errors are thrown.
+
+        Options:
+        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
+        - `query`: the SQL query to execute
+        - `params`: the bind parameters for the query, as a list for positional `?` placeholders or a map for named `:name` placeholders
+    ''')
+    @Function
+    List<Record> sqlQuery(Map opts) {
+        CheckHelper.checkParams('sqlQuery', opts, SQL_QUERY_PARAMS)
+        final query = (opts?.query as String)?.trim()
+        if( !query )
+            throw new IllegalArgumentException("Missing required option 'query' for sqlQuery")
+        final dbName = dbNameFromOpts(opts)
+        final dataSource = dataSourceFromOpts(opts)
+        try( Sql sql = Sql.newInstance(dataSource.toMap()) ) {
+            return executeQuery(sql, query, opts.params)
+        }
+        catch( IllegalArgumentException e ) {
+            throw e
+        }
+        catch( SQLException | RuntimeException e ) {
+            throw new IllegalStateException("sqlQuery failed on db '${dbName}': ${e.message}", e)
+        }
+    }
+
+    private static List<Record> executeQuery(Sql sql, String query, Object params) {
+        final bound = params != null ? new SqlParams(sql, query).bind(params) : null
+        sql.enableNamedQueries = false
+        final List<Record> result = []
+        final reader = { ResultSet rs -> result.addAll(readRows(rs)) }
+        if( bound != null )
+            sql.query(bound.sql, bound.params, reader)
+        else
+            sql.query(query, reader)
+        return result
+    }
+
+    private static List<Record> readRows(ResultSet rs) {
+        final meta = rs.getMetaData()
+        final upperCase = storesUpperCaseIdentifiers(rs.getStatement().getConnection().getMetaData())
+        final count = meta.getColumnCount()
+        final keys = new ArrayList<String>(count)
+        for( int i=1; i<=count; i++ )
+            keys << columnKey(meta.getColumnLabel(i), upperCase)
+        final duplicates = keys.findAll { k -> keys.count(k) > 1 }.unique()
+        if( duplicates )
+            throw new IllegalArgumentException("Query result has duplicate column labels: ${duplicates.join(', ')} - use column aliases to make them unique")
+        final List<Record> rows = []
+        while( rs.next() ) {
+            final values = new LinkedHashMap<String,Object>(count)
+            for( int i=1; i<=count; i++ )
+                values.put(keys[i-1], materialize(rs.getObject(i)))
+            rows << new RecordMap(values)
+        }
+        return rows
+    }
+
+    /**
+     * Convert values that are only valid while the connection is open
+     * (large objects and arrays) into plain values, and arrays into lists.
+     */
+    private static Object materialize(Object value) {
+        if( value instanceof Clob ) {
+            final clob = (Clob) value
+            try { return clob.getSubString(1, (int) clob.length()) }
+            finally { free { clob.free() } }
+        }
+        if( value instanceof Blob ) {
+            final blob = (Blob) value
+            try { return blob.getBytes(1, (int) blob.length()) }
+            finally { free { blob.free() } }
+        }
+        if( value instanceof java.sql.Array ) {
+            final array = (java.sql.Array) value
+            try { return arrayToList(array.getArray()) }
+            finally { free { array.free() } }
+        }
+        if( value instanceof SQLXML ) {
+            final xml = (SQLXML) value
+            try { return xml.getString() }
+            finally { free { xml.free() } }
+        }
+        // some drivers (e.g. H2 1.x) return arrays as plain Java arrays
+        if( value != null && value.getClass().isArray() && value !instanceof byte[] )
+            return arrayToList(value)
+        return value
+    }
+
+    private static List arrayToList(Object array) {
+        return (array as List).collect { materialize(it) }
+    }
+
+    private static void free(Closure action) {
+        try {
+            action.call()
+        }
+        catch( SQLFeatureNotSupportedException | AbstractMethodError e ) {
+            // not supported by the driver
+        }
+    }
+
+    /**
+     * Get the record key for a column label: an upper-case label is
+     * converted to lower case if the database stores unquoted identifiers
+     * in upper case, so that unquoted columns have the same key on any
+     * database, while quoted mixed-case labels are preserved.
+     */
+    protected static String columnKey(String label, boolean upperCaseIdentifiers) {
+        if( upperCaseIdentifiers && label == label.toUpperCase(Locale.ROOT) )
+            return label.toLowerCase(Locale.ROOT)
+        return label
+    }
+
+    private static boolean storesUpperCaseIdentifiers(DatabaseMetaData metaData) {
+        try {
+            return metaData.storesUpperCaseIdentifiers()
+        }
+        catch( SQLException | UnsupportedOperationException e ) {
+            log.debug "[SQL] unable to determine identifier case for this database: ${e.message}"
             return false
         }
     }

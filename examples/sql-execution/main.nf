@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 
 /*
- * Example script demonstrating how to use the SQL sqlExecute function
+ * Example script demonstrating how to use the sqlExecute and sqlQuery functions
  */
 
-include { fromQuery; sqlExecute } from 'plugin/nf-sqldb'
+include { sqlExecute; sqlQuery } from 'plugin/nf-sqldb'
 
 // The `demo` database is defined in nextflow.config:
 // sql { db { demo { url = 'jdbc:h2:./demo' } } }
@@ -70,6 +70,6 @@ workflow {
     // Step 5: Query results
     log.info "Querying results..."
     channel
-        .fromQuery("SELECT * FROM TEST_TABLE ORDER BY ID", db: 'demo')
-        .view { row -> "ID: ${row[0]}, Name: ${row[1]}, Value: ${row[2]}" }
+        .fromList(sqlQuery(db: 'demo', query: 'SELECT * FROM TEST_TABLE WHERE VALUE > ? ORDER BY ID', params: [0]))
+        .view { row -> "ID: ${row.id}, Name: ${row.name}, Value: ${row.value}" }
 } 

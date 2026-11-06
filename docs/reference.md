@@ -1,10 +1,100 @@
 # Reference
 
-This plugin provides the `fromQuery` channel factory and the `sqlInsert` operator for querying from and inserting into database tables, and the `sqlExecute` function for executing SQL statements that don't return data, such as DDL (Data Definition Language) and DML (Data Manipulation Language) operations.
+This plugin provides the `sqlQuery` function for querying data, and the `sqlExecute` function for executing SQL statements that don't return data, such as DDL (Data Definition Language) and DML (Data Manipulation Language) operations. It also provides the `fromQuery` channel factory and the `sqlInsert` operator, which are deprecated because plugin channel factories and operators are not supported with static typing.
 
-_NOTE:_ `sqlInsert` is deprecated. Use `sqlExecute` instead (see [Migrating from sqlInsert](#migrating-from-sqlinsert)).
+_NOTE:_ `fromQuery` and `sqlInsert` are deprecated. Use `sqlQuery` and `sqlExecute` instead (see [Migrating from fromQuery](#migrating-from-fromquery) and [Migrating from sqlInsert](#migrating-from-sqlinsert)).
+
+## sqlQuery
+
+The `sqlQuery` function queries a SQL database and returns a list of [records](https://docs.seqera.io/nextflow/reference/stdlib-types/record), one for each row in the result set. For example:
+
+```nextflow
+include { sqlQuery } from 'plugin/nf-sqldb'
+
+def rows = sqlQuery(db: 'foo', query: 'SELECT id, name FROM sample ORDER BY id')
+println rows // [[id: 1, name: 'alpha'], [id: 2, name: 'beta']]
+```
+
+Use `channel.fromList` to emit the rows in a channel:
+
+```nextflow
+channel.fromList(sqlQuery(db: 'foo', query: 'SELECT id, name FROM sample'))
+    .view { row -> "${row.id}: ${row.name}" }
+```
+
+Use `params` to pass values to the query as bind parameters, instead of formatting them into the SQL string. Use a list for positional `?` placeholders, or a map for named `:name` placeholders:
+
+```nextflow
+sqlQuery(db: 'foo', query: 'SELECT id, name FROM sample WHERE value > ?', params: [10])
+
+sqlQuery(db: 'foo', query: 'SELECT id, name FROM sample WHERE name = :name', params: [name: 'alpha'])
+```
+
+Since `sqlQuery` is a function, it can also be called in an operator closure, for example to look up each item of a channel and emit the matching rows:
+
+```nextflow
+channel.of('alpha', 'beta')
+    .flatMap { name -> sqlQuery(db: 'foo', query: 'SELECT name, value FROM sample WHERE name = ?', params: [name]) }
+    .view()
+```
+
+This opens a connection to the database for each item, which can be slow for many items.
+
+`sqlQuery` runs as soon as it is called, so it sees the changes made by any `sqlExecute` call before it:
+
+```nextflow
+include { sqlExecute; sqlQuery } from 'plugin/nf-sqldb'
+
+workflow {
+    sqlExecute(db: 'foo', statement: "INSERT INTO sample (id, name) VALUES (3, 'gamma')")
+    channel.fromList(sqlQuery(db: 'foo', query: 'SELECT id, name FROM sample')).view()
+}
+```
+
+To query the database after inserting the items of a channel, query it in the same closure:
+
+```nextflow
+ch.collect().subscribe { rows ->
+    def res = sqlExecute(db: 'foo', statement: 'INSERT INTO sample (id, name) VALUES (?, ?)', batch: rows.collect { r -> [r.id, r.name] })
+    if( !res.success )
+        error(res.error)
+    println sqlQuery(db: 'foo', query: 'SELECT count(*) AS total FROM sample')
+}
+```
+
+The following options are available:
+
+`db`
+: The database handle. It must be defined under `sql.db` in the Nextflow configuration. If not specified, the `default` database is used (see [Configuration](configuration.md#default-database)).
+
+`query`
+: The SQL query to execute (required).
+
+`params`
+: The bind parameters for the query: a list of values for positional `?` placeholders, or a map of values for named `:name` placeholders. Named placeholders are parsed in the same way as for [sqlExecute](#sqlexecute).
+
+### Return value
+
+The result is a list with a record for each row, in the order returned by the database. Each record maps the column labels (the column alias if specified, otherwise the column name) to the row values, in column order. Records are immutable, and their keys are case-sensitive.
+
+If the database stores unquoted identifiers in upper case (e.g. H2 and Oracle), column labels that are entirely in upper case are converted to lower case. Otherwise, column labels are used as reported by the database. As a result, unquoted column names are lower case on most databases, while quoted aliases keep their case. For example, `SELECT id, name AS "FullName" FROM sample` returns records with the keys `id` and `FullName` on H2, Postgres, and MySQL.
+
+Column labels must be unique: a query whose result has two columns with the same label, such as `id` from two joined tables, is rejected. Use column aliases to make them unique.
+
+The values are returned as provided by the database driver, e.g. `Integer`, `BigDecimal`, `String`, or `java.sql.Timestamp`, except for values that can't be read after the connection is closed, which are converted as follows: character large objects (`CLOB`) and XML values to `String`, binary large objects (`BLOB`) to `byte[]`, and arrays to `List` (nested arrays to nested lists). Other array values returned by the driver (except `byte[]`) are also converted to `List`.
+
+The whole result set is loaded into memory. Use a `LIMIT` clause or more selective queries for large tables.
+
+### Errors
+
+Unlike `sqlExecute`, `sqlQuery` throws an error on failure, which stops the run:
+
+- Invalid options (e.g. a missing `query`) or an unknown database throw an `IllegalArgumentException`
+- A database error (e.g. invalid SQL or a connection failure) throws an `IllegalStateException`, with a message including the database name and the database error
 
 ## fromQuery
+
+_DEPRECATED:_ plugin channel factories are not supported with static typing. Use `sqlQuery` instead (see [Migrating from fromQuery](#migrating-from-fromquery)).
 
 The `fromQuery` factory method queries a SQL database and creates a channel that emits a tuple for each row in the corresponding result set. For example:
 
@@ -28,6 +118,26 @@ The following options are available:
 
 `emitColumns`
 : When `true`, the column names in the `SELECT` statement are emitted as the first tuple in the resulting channel.
+
+### Migrating from fromQuery
+
+Use `sqlQuery` with `channel.fromList` in place of `fromQuery`:
+
+```nextflow
+// before
+channel.fromQuery('SELECT alpha, delta FROM sample', db: 'foo')
+
+// after
+channel.fromList(sqlQuery(db: 'foo', query: 'SELECT alpha, delta FROM sample'))
+```
+
+Note the following differences:
+
+- `sqlQuery` emits a record for each row instead of a tuple, so use the column names instead of indices, e.g. `row.alpha` instead of `row[0]`. Use `.map { row -> tuple(row.alpha, row.delta) }` to get the same tuples as `fromQuery`. See [Return value](#return-value) for the case of the keys.
+- `sqlQuery` reads the whole result set into memory before returning, while `fromQuery` with `batchSize` reads it in batches. There is no equivalent of `batchSize` and `batchDelay`.
+- There is no equivalent of `emitColumns`, as each record carries the column names.
+- `sqlQuery` runs when it is called, while `fromQuery` runs when the workflow starts.
+- `sqlQuery` throws an error on failure.
 
 ## sqlInsert
 
@@ -164,16 +274,18 @@ Use `params` to pass values to the statement as bind parameters, instead of form
 ```nextflow
 sqlExecute(
     db: 'foo',
-    statement: 'INSERT INTO sample_table (id, name, value) VALUES (?, ?, ?)',
-    params: [2, "O'Brien", null]
+    statement: 'UPDATE sample_table SET name = ? WHERE name = ?',
+    params: ["O'Brien", 'alpha']
 )
 
 sqlExecute(
     db: 'foo',
-    statement: 'UPDATE sample_table SET value = :value WHERE name = :name',
-    params: [name: 'alpha', value: 42.0]
+    statement: 'INSERT INTO sample_table (id, name, value) VALUES (:id, :name, :value)',
+    params: [id: 2, name: 'delta', value: null]
 )
 ```
+
+With static typing, the values in a list must have the same type, so use a map for values of different types.
 
 Use `batch` to execute a statement for many sets of parameters at once:
 

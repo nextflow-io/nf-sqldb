@@ -9,7 +9,7 @@ group = 'io.nextflow'
 version = project.file('VERSION').text.trim()
 
 nextflowPlugin {
-    nextflowVersion = '25.10.0'
+    nextflowVersion = '26.04.0'
 
     provider = 'nextflow'
     className = 'nextflow.sql.SqlPlugin'
@@ -72,7 +72,6 @@ dependencies {
 
     testImplementation 'org.apache.groovy:groovy-nio:4.0.26'
     testImplementation('org.apache.groovy:groovy-test:4.0.26') { exclude group: 'org.apache.groovy' }
-    testImplementation 'com.google.jimfs:jimfs:1.1'
 }
 
 // Publish the plugin jar to the Seqera Maven repository (used by nf-databricks, nf-trino, etc.)
