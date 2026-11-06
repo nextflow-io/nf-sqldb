@@ -75,7 +75,7 @@ class SqlConfig implements ConfigScope {
                 result.put( entry.key, defSource )
             }
             else {
-                result.put( entry.key, new SqlDataSource(entry.value, defSource) )
+                result.put( entry.key, new SqlDataSource(entry.key, entry.value, defSource) )
             }
         }
 

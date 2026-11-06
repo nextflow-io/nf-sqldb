@@ -38,6 +38,7 @@ import nextflow.sql.config.SqlDataSource
 import nextflow.util.CheckHelper
 import java.sql.Connection
 import java.sql.Statement
+import java.util.concurrent.ConcurrentHashMap
 import groovy.sql.Sql
 /**
  * Provide a channel factory extension that allows the execution of Sql queries
@@ -68,9 +69,31 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     private Session session
     private SqlConfig config
 
+    // built-in in-memory databases used in this run, closed on session shutdown
+    private final Set<SqlDataSource> builtInDataSources = ConcurrentHashMap.<SqlDataSource>newKeySet()
+
     protected void init(Session session) {
         this.session = session
         this.config = new SqlConfig((Map) session.config.navigate('sql.db'))
+        session.onShutdown { closeBuiltInDatabases() }
+    }
+
+    protected SqlDataSource track(SqlDataSource dataSource) {
+        if( dataSource?.isBuiltIn() )
+            builtInDataSources.add(dataSource)
+        return dataSource
+    }
+
+    protected void closeBuiltInDatabases() {
+        for( final dataSource : builtInDataSources ) {
+            builtInDataSources.remove(dataSource)
+            try( Connection conn = Sql.newInstance(dataSource.toMap()).getConnection(); Statement stm = conn.createStatement() ) {
+                stm.execute('SHUTDOWN')
+            }
+            catch( Exception e ) {
+                log.debug "Unable to shut down in-memory database: ${dataSource.url} - cause: ${e.message}"
+            }
+        }
     }
 
     @Description('''
@@ -110,7 +133,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
 
     protected SqlDataSource dataSourceFromOpts(Map opts) {
         final dsName = (opts?.db ?: 'default') as String
-        final dataSource = config.getDataSource(dsName)
+        final dataSource = track(config.getDataSource(dsName))
         if( dataSource==null ) {
             def msg = "Unknown db name: $dsName"
             def choices = config.getDataSourceNames()
@@ -185,7 +208,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             return [success: false, error: "Missing required parameter 'statement'"]
             
         final sqlConfig = new SqlConfig((Map) session.config.navigate('sql.db'))
-        final SqlDataSource dataSource = sqlConfig.getDataSource(dbName)
+        final SqlDataSource dataSource = track(sqlConfig.getDataSource(dbName))
         
         if (dataSource == null) {
             def msg = "Unknown db name: $dbName"

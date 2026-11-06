@@ -18,6 +18,7 @@
 package nextflow.sql
 
 import groovy.sql.Sql
+import nextflow.Channel
 import nextflow.Global
 import nextflow.Session
 import spock.lang.Specification
@@ -354,5 +355,92 @@ class SqlExecutionTest extends Specification {
 
         cleanup:
         sql?.close()
+    }
+
+    // the default database is shared by all tests in the JVM, so use unique table names and drop them
+    def 'should keep data in the default database between calls'() {
+        given:
+        def session = Mock(Session) {
+            getConfig() >> [:]
+            addIgniter(_) >> { Closure action -> action.call() }
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+
+        when:
+        def createResult = sqlExtension.sqlExecute([statement: 'CREATE TABLE test_default(id INT PRIMARY KEY, name VARCHAR(255))'])
+        def insertResult = sqlExtension.sqlExecute([statement: 'INSERT INTO test_default VALUES (1, \'foo\'), (2, \'bar\')'])
+        def query = sqlExtension.fromQuery('SELECT id, name FROM test_default ORDER BY id')
+        then:
+        createResult == [success: true, result: null]
+        insertResult == [success: true, result: 2]
+        query.val == [1, 'foo']
+        query.val == [2, 'bar']
+        query.val == Channel.STOP
+
+        cleanup:
+        sqlExtension?.sqlExecute([statement: 'DROP TABLE IF EXISTS test_default'])
+    }
+
+    def 'should give a database without url its own in-memory database'() {
+        given:
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [isolated: [user: 'bob', password: 'pw']]]]
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+
+        when:
+        def createDefault = sqlExtension.sqlExecute([statement: 'CREATE TABLE test_isolated_default(id INT)'])
+        def createOther = sqlExtension.sqlExecute([db: 'isolated', statement: 'CREATE TABLE test_isolated_other(id INT)'])
+        then:
+        createDefault.success
+        createOther.success
+        and:
+        sqlExtension.sqlExecute([db: 'isolated', statement: 'INSERT INTO test_isolated_default VALUES (1)']).error.contains("not found")
+        sqlExtension.sqlExecute([statement: 'INSERT INTO test_isolated_other VALUES (1)']).error.contains("not found")
+        sqlExtension.sqlExecute([db: 'isolated', statement: 'INSERT INTO test_isolated_other VALUES (1)']) == [success: true, result: 1]
+
+        cleanup:
+        sqlExtension?.closeBuiltInDatabases()
+    }
+
+    def 'should inherit the configured default url for a database without url'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()};DB_CLOSE_DELAY=-1"
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [default: [url: JDBC_URL], other: [:]]]]
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+
+        when:
+        sqlExtension.sqlExecute([statement: 'CREATE TABLE test_inherit(id INT)'])
+        def result = sqlExtension.sqlExecute([db: 'other', statement: 'INSERT INTO test_inherit VALUES (1)'])
+        then:
+        result == [success: true, result: 1]
+
+        cleanup:
+        sqlExtension?.sqlExecute([statement: 'SHUTDOWN'])
+    }
+
+    def 'should close the built-in databases on session shutdown'() {
+        given:
+        Runnable shutdownHook = null
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [closed: [:]]]]
+            onShutdown(_) >> { Runnable hook -> shutdownHook = hook }
+        }
+        def sqlExtension = new ChannelSqlExtension()
+        sqlExtension.init(session)
+        and:
+        sqlExtension.sqlExecute([statement: 'CREATE TABLE test_shutdown(id INT)'])
+        sqlExtension.sqlExecute([db: 'closed', statement: 'CREATE TABLE test_shutdown(id INT)'])
+
+        when:
+        shutdownHook.run()
+        then:
+        sqlExtension.sqlExecute([statement: 'INSERT INTO test_shutdown VALUES (1)']).error.contains("not found")
+        sqlExtension.sqlExecute([db: 'closed', statement: 'INSERT INTO test_shutdown VALUES (1)']).error.contains("not found")
     }
 }

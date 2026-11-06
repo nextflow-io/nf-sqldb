@@ -34,7 +34,7 @@ import nextflow.script.dsl.Description
 @ToString(includePackage = false, includeNames = true)
 @EqualsAndHashCode
 class SqlDataSource implements ConfigScope {
-    public static String DEFAULT_URL = 'jdbc:h2:mem:'
+    public static String DEFAULT_URL = memUrl('default')
     public static String DEFAULT_DRIVER = 'org.h2.Driver'
     public static String DEFAULT_USER = 'sa'
 
@@ -67,18 +67,36 @@ class SqlDataSource implements ConfigScope {
     ''')
     String password
 
+    // true when the url is a plugin-managed in-memory H2 database
+    private boolean builtIn
+
     SqlDataSource(Map opts) {
         this.url = opts.url ?: DEFAULT_URL
+        this.builtIn = !opts.url
         this.driver = opts.driver ?: urlToDriver(url) ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password')
     }
 
-    SqlDataSource(Map opts, SqlDataSource fallback) {
-        this.url = opts.url ?: fallback.url ?: DEFAULT_URL
+    /**
+     * Create a named data source with fallback values. A data source without a url
+     * inherits the fallback url only if it was configured explicitly, otherwise it
+     * gets its own in-memory database.
+     */
+    SqlDataSource(String name, Map opts, SqlDataSource fallback) {
+        this.builtIn = !opts.url && fallback.builtIn
+        this.url = opts.url ?: (builtIn ? memUrl(name) : fallback.url)
         this.driver = opts.driver ?: urlToDriver(url) ?: fallback.driver ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: fallback.user ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password') ?: fallback.password
+    }
+
+    static String memUrl(String name) {
+        return "jdbc:h2:mem:${name.replaceAll(/[^A-Za-z0-9_]/, '_')};DB_CLOSE_DELAY=-1"
+    }
+
+    boolean isBuiltIn() {
+        return builtIn
     }
 
     protected String urlToDriver(String url) {
