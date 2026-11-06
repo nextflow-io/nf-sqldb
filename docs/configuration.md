@@ -33,6 +33,9 @@ The following options are available:
 `sql.db.'<DB-NAME>'.password`
 : The database connection password.
 
+`sql.db.'<DB-NAME>'.maxPoolSize`
+: The maximum number of connections to the database that the `sqlQuery` and `sqlExecute` functions can open at the same time (default: `10`). Connections are pooled for the duration of the run (see [Connections](reference.md#connections)). Set to `0` to disable pooling, so that each call opens its own connection. Embedded file databases (e.g. DuckDB, SQLite or H2 files) are not pooled unless this option is set, since an open connection locks the file.
+
 ## Default database
 
 The `default` database is used when an operator or function does not specify a database. Unless configured, it is an in-memory H2 database (`jdbc:h2:mem:default;DB_CLOSE_DELAY=-1`) with user `sa`. Settings defined under `sql.db.default` also act as fallback values for all other databases. A database configured without `url` gets its own in-memory H2 database (`jdbc:h2:mem:<name>;DB_CLOSE_DELAY=-1`), unless `sql.db.default.url` is set.

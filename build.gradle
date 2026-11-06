@@ -1,8 +1,14 @@
 
+import java.util.zip.ZipFile
+
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.16'
     id 'maven-publish'
     id 'de.undercouch.download' version '5.6.0'
+    // only the ShadowJar task type is used, to relocate HikariCP
+    id 'com.gradleup.shadow' version '9.6.1' apply false
 }
 
 group = 'io.nextflow'
@@ -74,6 +80,37 @@ dependencies {
     testImplementation('org.apache.groovy:groovy-test:4.0.26') { exclude group: 'org.apache.groovy' }
 }
 
+// HikariCP is relocated and bundled in the plugin jar, so that plugins that bundle
+// nf-sqldb without its dependencies (e.g. nf-databricks) don't need to add it.
+// The sources import the relocated package directly.
+configurations {
+    hikari { transitive = false }
+}
+
+dependencies {
+    hikari 'com.zaxxer:HikariCP:7.1.0'
+}
+
+def relocateHikari = tasks.register('relocateHikari', ShadowJar) {
+    description = 'Relocates HikariCP into the nextflow.sql.shaded.hikari package.'
+    configurations = [project.configurations.hikari]
+    relocate 'com.zaxxer.hikari', 'nextflow.sql.shaded.hikari'
+    exclude 'module-info.class'
+    archiveFileName = 'hikari-relocated.jar'
+    destinationDirectory = layout.buildDirectory.dir('relocated')
+}
+
+dependencies {
+    compileOnly files(relocateHikari)
+    testImplementation files(relocateHikari)
+}
+
+tasks.named('jar', Jar) {
+    from(zipTree(relocateHikari.flatMap { it.archiveFile })) {
+        exclude 'META-INF/**'
+    }
+}
+
 // Publish the plugin jar to the Seqera Maven repository (used by nf-databricks, nf-trino, etc.)
 publishing {
     publications {
@@ -98,6 +135,22 @@ tasks.withType(GenerateModuleMetadata).configureEach {
 
 test {
     systemProperty 'pluginVersion', version
+}
+
+tasks.register('verifyShadedJar') {
+    description = 'Checks that HikariCP is relocated in the plugin jar.'
+    group = 'verification'
+    def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file(jarFile)
+    doLast {
+        final names = new ZipFile(jarFile.get().asFile).withCloseable { zip -> zip.entries().collect { it.name } }
+        if( !names.contains('nextflow/sql/shaded/hikari/HikariDataSource.class') || names.any { it.startsWith('com/zaxxer/') } )
+            throw new GradleException('HikariCP is not relocated in the plugin jar')
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'verifyShadedJar'
 }
 
 // Integration tests against real databases (requires Docker), not part of `check`

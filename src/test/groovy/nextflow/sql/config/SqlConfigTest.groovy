@@ -160,6 +160,17 @@ class SqlConfigTest extends Specification {
     }
 
 
+    def 'should inherit maxPoolSize from the default config' () {
+        when:
+        def config = new SqlConfig([default: [maxPoolSize: 8], foo: [url: 'jdbc:foo:x'], bar: [url: 'jdbc:bar:x', maxPoolSize: '2'], baz: [url: 'jdbc:baz:x']])
+        then:
+        config.getDataSource('default').maxPoolSize == 8
+        config.getDataSource('foo').maxPoolSize == 8
+        config.getDataSource('bar').maxPoolSize == 2
+        and:
+        new SqlConfig([foo: [url: 'jdbc:foo:x']]).getDataSource('foo').maxPoolSize == null
+    }
+
     def 'should validate equals & hashCode' () {
         given:
         def foo = [ 'myDatabase': [url:'jdbc:foo:mem', driver: 'org.foo.Driver', user: 'user-x', password: 'pass-y'] ]
@@ -186,7 +197,7 @@ class SqlConfigTest extends Specification {
         then:
         scope.children().keySet() == ['db'] as Set
         db.placeholderName() == '<name>'
-        db.scope().children().keySet() == ['url', 'driver', 'user', 'password'] as Set
+        db.scope().children().keySet() == ['url', 'driver', 'user', 'password', 'maxPoolSize'] as Set
         db.scope().children().values().every { it instanceof SpecNode.Option }
     }
 
