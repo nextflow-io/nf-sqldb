@@ -51,6 +51,8 @@ import nextflow.util.RecordMap
 import java.sql.Connection
 import java.sql.Statement
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Level
+import java.util.logging.Logger
 import groovy.sql.Sql
 /**
  * Provide a channel factory extension that allows the execution of Sql queries
@@ -60,6 +62,14 @@ import groovy.sql.Sql
 @Slf4j
 @CompileStatic
 class ChannelSqlExtension extends PluginExtensionPoint {
+
+    // groovy-sql logs failed statements as warnings to stderr, which duplicates the errors reported by
+    // sqlExecute and sqlQuery; keep a reference, since java.util.logging only holds loggers weakly
+    private static final Logger GROOVY_SQL_LOGGER = Logger.getLogger(Sql.name)
+
+    static {
+        GROOVY_SQL_LOGGER.setLevel(Level.SEVERE)
+    }
 
     private static final Map QUERY_PARAMS = [
             db: CharSequence,
