@@ -75,6 +75,43 @@ class SqlConfigTest extends Specification {
         }
     }
 
+    def 'should create a separate in-memory database for a database without url' () {
+        given:
+        def map = [
+                'default': [user: 'alice'],
+                'my-db': [user: 'bob', password: 'pw']]
+        when:
+        def config = new SqlConfig(map)
+        then:
+        with(config.getDataSource('my-db')) {
+            url == 'jdbc:h2:mem:my_db;DB_CLOSE_DELAY=-1'
+            driver == SqlDataSource.DEFAULT_DRIVER
+            user == 'bob'
+            password == 'pw'
+            builtIn
+        }
+        and:
+        config.getDataSource('default').url == SqlDataSource.DEFAULT_URL
+        config.getDataSource('default').builtIn
+    }
+
+    def 'should inherit an explicit default url' () {
+        given:
+        def map = [
+                'default': [url: 'jdbc:h2:mem:shared'],
+                myDatabase: [user: 'bob']]
+        when:
+        def config = new SqlConfig(map)
+        then:
+        with(config.getDataSource('myDatabase')) {
+            url == 'jdbc:h2:mem:shared'
+            user == 'bob'
+            !builtIn
+        }
+        and:
+        !config.getDataSource('default').builtIn
+    }
+
     def 'should override default config' () {
         given:
         def map = [

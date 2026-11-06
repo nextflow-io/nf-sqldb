@@ -18,6 +18,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Support qualified `sqlInsert` table names (e.g. `into: 'myschema.mytable'`, `mydb.mytable` on MySQL, or an attached database on DuckDB) with inferred columns (#44)
 - Fix `sqlInsert` with inferred columns treating `_` and `%` in table names as wildcards (#44)
 - Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
+- Fix the built-in `default` H2 database losing its data between calls (e.g. a table created with `sqlExecute` was not visible to the next `sqlExecute`, `fromQuery` or `sqlInsert`). Built-in in-memory databases now keep their data for the duration of the run, and a database configured without `url` gets its own in-memory database instead of sharing the `default` one, unless `sql.db.default.url` is set (#50)
 - Don't append a trailing semicolon to queries and statements, which Trino and other JDBC drivers reject (#16)
 - Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment
 - Don't reject paginated queries whose identifiers merely contain `limit` or `offset` (e.g. `rate_limit`)

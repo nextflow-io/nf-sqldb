@@ -35,7 +35,9 @@ The following options are available:
 
 ## Default database
 
-The `default` database is used when an operator or function does not specify a database. Unless configured, it is an in-memory H2 database (`jdbc:h2:mem:`) with user `sa`. Settings defined under `sql.db.default` also act as fallback values for all other databases.
+The `default` database is used when an operator or function does not specify a database. Unless configured, it is an in-memory H2 database (`jdbc:h2:mem:default;DB_CLOSE_DELAY=-1`) with user `sa`. Settings defined under `sql.db.default` also act as fallback values for all other databases. A database configured without `url` gets its own in-memory H2 database (`jdbc:h2:mem:<name>;DB_CLOSE_DELAY=-1`), unless `sql.db.default.url` is set.
+
+These in-memory databases keep their data for the duration of the pipeline run, and are discarded when the run ends.
 
 ## Secrets
 
