@@ -17,6 +17,14 @@
 
 package nextflow.sql
 
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.SQLFeatureNotSupportedException
+
 import groovy.sql.Sql
 import nextflow.Channel
 import nextflow.Global
@@ -196,6 +204,250 @@ class SqlExecutionTest extends Specification {
 
         cleanup:
         sql?.close()
+    }
+
+    private ChannelSqlExtension extension(String url) {
+        def session = Mock(Session) {
+            getConfig() >> [sql: [db: [test: [url: url]]]]
+        }
+        def result = new ChannelSqlExtension()
+        result.init(session)
+        return result
+    }
+
+    private static List rows(Sql sql, String table) {
+        sql.rows("SELECT id, name, val FROM $table ORDER BY id".toString()).collect { [it.id, it.name, it.val] }
+    }
+
+    def 'should execute statement with positional params'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE p1(id INT PRIMARY KEY, name VARCHAR(255), val INT)')
+        def ext = extension(JDBC_URL)
+        def name = 'gamma'
+
+        expect:
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p1 (id, name, val) VALUES (?, ?, ?)', params: [1, 'alpha', 10]) == [success: true, result: 1]
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p1 (id, name, val) VALUES (?, ?, ?)', params: [2, "beta", null]) == [success: true, result: 1]
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p1 (id, name, val) VALUES (?, ?, ?)', params: [3, "${name}", 30]) == [success: true, result: 1]
+        ext.sqlExecute(db: 'test', statement: 'UPDATE p1 SET val = ? WHERE val > ?', params: [0, 5]) == [success: true, result: 2]
+        rows(sql, 'p1') == [[1, 'alpha', 0], [2, 'beta', null], [3, 'gamma', 0]]
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should execute statement with named params'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE p2(id INT PRIMARY KEY, name VARCHAR(255), val INT)')
+        def ext = extension(JDBC_URL)
+
+        when:
+        def insert = ext.sqlExecute(db: 'test', statement: 'INSERT INTO p2 (id, name, val) VALUES (:id, :name, :val)', params: [val: 10, name: 'alpha', id: 1, extra: 'ignored'])
+        def update = ext.sqlExecute(db: 'test', statement: "UPDATE p2 SET name = :name || ' at 12:30' WHERE id = :id OR val = :id", params: [id: 1, name: 'beta'])
+        def missing = ext.sqlExecute(db: 'test', statement: 'UPDATE p2 SET val = :val WHERE id = :id', params: [id: 1])
+        def positional = ext.sqlExecute(db: 'test', statement: 'UPDATE p2 SET val = ? WHERE id = ?', params: [id: 1])
+        then:
+        insert == [success: true, result: 1]
+        update == [success: true, result: 1]
+        missing.success == false
+        missing.error.contains('Missing value for named parameter `:val`')
+        positional.success == false
+        positional.error.contains('no named placeholders')
+        rows(sql, 'p2') == [[1, 'beta at 12:30', 10]]
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should bind values with quotes and SQL as plain values'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE p3(id INT PRIMARY KEY, name VARCHAR(255), val INT)')
+        def ext = extension(JDBC_URL)
+        def evil = "x'); DROP TABLE p3; --"
+
+        expect:
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p3 (id, name) VALUES (?, ?)', params: [1, evil]).success
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p3 (id, name) VALUES (:id, :name)', params: [id: 2, name: "O'Brien :id ?"]).success
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO p3 (id, name) VALUES (?, ?)', params: [3, 'a[1:2] :name']).success
+        rows(sql, 'p3') == [[1, evil, null], [2, "O'Brien :id ?", null], [3, 'a[1:2] :name', null]]
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should execute DDL statement with params'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        def ext = extension(JDBC_URL)
+
+        expect:
+        ext.sqlExecute(db: 'test', statement: 'CREATE TABLE p4(id INT PRIMARY KEY)', params: []) == [success: true, result: null]
+        ext.sqlExecute(db: 'test', statement: 'CREATE TABLE p5(id INT PRIMARY KEY)', params: [:]) == [success: true, result: null]
+        sql.rows("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME IN ('P4', 'P5')").size() == 2
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should execute batch with #type rows'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b1(id INT PRIMARY KEY, name VARCHAR(255), val INT)')
+        def ext = extension(JDBC_URL)
+
+        when:
+        def result = ext.sqlExecute(db: 'test', statement: statement, batch: batch)
+        then:
+        result == [success: true, result: 2500]
+        sql.firstRow('SELECT COUNT(*) AS cnt FROM b1').cnt == 2500
+        rows(sql, 'b1').take(2) == [[1, 'r1', null], [2, "r'2", 2]]
+
+        when:
+        def update = ext.sqlExecute(db: 'test', statement: 'UPDATE b1 SET val = ? WHERE id <= ?', batch: [[0, 10], [0, 20], [0, 0]])
+        then:
+        update == [success: true, result: 30]
+
+        cleanup:
+        sql?.close()
+
+        where:
+        type   | statement                                                  | batch
+        'list' | 'INSERT INTO b1 (id, name, val) VALUES (?, ?, ?)'          | (1..2500).collect { [it, it == 2 ? "r'2" : "r$it", it == 1 ? null : it] }
+        'map'  | 'INSERT INTO b1 (id, name, val) VALUES (:id, :name, :val)' | (1..2500).collect { [id: it, name: it == 2 ? "r'2" : "r$it", val: it == 1 ? null : it] }
+    }
+
+    def 'should roll back batch on error'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b2(id INT PRIMARY KEY, name VARCHAR(255), val INT)')
+        def ext = extension(JDBC_URL)
+
+        when: 'a row violates the primary key after the first chunk'
+        def result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO b2 (id, name) VALUES (?, ?)', batch: (1..1500).collect { [it, 'x'] } + [[1, 'dup']])
+        then:
+        result.success == false
+        result.error != null
+        sql.firstRow('SELECT COUNT(*) AS cnt FROM b2').cnt == 0
+
+        when: 'a row is missing a named value'
+        result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO b2 (id, name) VALUES (:id, :name)', batch: [[id: 1, name: 'a'], [id: 2]])
+        then:
+        result.success == false
+        result.error.contains('Missing value for named parameter `:name`')
+        sql.firstRow('SELECT COUNT(*) AS cnt FROM b2').cnt == 0
+
+        when: 'the connection is used again'
+        result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO b2 (id, name) VALUES (?, ?)', batch: [[1, 'a']])
+        then:
+        result == [success: true, result: 1]
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should execute empty batch'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b3(id INT PRIMARY KEY)')
+        def ext = extension(JDBC_URL)
+
+        expect:
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO b3 (id) VALUES (?)', batch: []) == [success: true, result: 0]
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should execute batch without a transaction if the driver does not support it'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b5(id INT PRIMARY KEY)')
+        and: 'a connection that rejects transactions, like Databricks'
+        def conn = DriverManager.getConnection(JDBC_URL, 'sa', null)
+        def noTx = (Connection) Proxy.newProxyInstance(Connection.classLoader, [Connection] as Class[], { proxy, Method m, Object[] args ->
+            if( m.name == 'setAutoCommit' && args[0] == false || m.name in ['commit', 'rollback'] )
+                throw new SQLFeatureNotSupportedException(m.name)
+            try { return m.invoke(conn, args) }
+            catch( InvocationTargetException e ) { throw e.cause }
+        } as InvocationHandler)
+
+        expect:
+        ChannelSqlExtension.executeBatch(new Sql(noTx), 'INSERT INTO b5 (id) VALUES (?)', [[1], [2], [3]]) == 3
+        sql.firstRow('SELECT COUNT(*) AS n FROM b5').n == 3
+
+        cleanup:
+        conn?.close()
+        sql?.close()
+    }
+
+    def 'should pass positional batch statement through unchanged'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b4(id INT PRIMARY KEY, "n:x" VARCHAR(255))')
+        def ext = extension(JDBC_URL)
+
+        expect:
+        ext.sqlExecute(db: 'test', statement: 'INSERT INTO b4 (id, "n:x") VALUES (?, ?)', batch: [[1, 'a'], [2, 'b']]) == [success: true, result: 2]
+        sql.rows('SELECT "n:x" AS n FROM b4 ORDER BY id').collect { it.n } == ['a', 'b']
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should parse named placeholder inside double-quoted identifier'() {
+        // documented limitation, use positional params for such statements
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b5(id INT PRIMARY KEY, "n:x" VARCHAR(255))')
+        def ext = extension(JDBC_URL)
+
+        when:
+        def result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO b5 (id, "n:x") VALUES (:id, :name)', params: [id: 1, name: 'a'])
+        then:
+        result == [success: false, error: 'Missing value for named parameter `:x`']
+
+        cleanup:
+        sql?.close()
+    }
+
+    def 'should reject invalid params and batch options'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
+        sql.execute('CREATE TABLE b4(id INT PRIMARY KEY)')
+        def ext = extension(JDBC_URL)
+
+        when:
+        def result = ext.sqlExecute([db: 'test', statement: statement] + opts)
+        then:
+        result.success == false
+        result.error.contains(error)
+        sql.firstRow('SELECT COUNT(*) AS cnt FROM b4').cnt == 0
+
+        cleanup:
+        sql?.close()
+
+        where:
+        statement                           | opts                        | error
+        'INSERT INTO b4 (id) VALUES (?)'    | [params: [1], batch: [[2]]] | "Options 'params' and 'batch' cannot be used together"
+        'INSERT INTO b4 (id) VALUES (?)'    | [params: 'foo']             | "Option 'params' must be a list or a map"
+        'INSERT INTO b4 (id) VALUES (?)'    | [params: 1]                 | "Option 'params' must be a list or a map"
+        'INSERT INTO b4 (id) VALUES (?)'    | [batch: [1, 2]]             | 'Bind parameters must be a list or a map'
+        'INSERT INTO b4 (id) VALUES (?)'    | [batch: [id: 1]]            | "Option 'batch' must be a list"
+        'INSERT INTO b4 (id) VALUES (:id)'  | [batch: [[1], [id: 2]]]     | 'Batch rows must be either all lists or all maps'
     }
 
     def 'should handle invalid SQL correctly'() {
