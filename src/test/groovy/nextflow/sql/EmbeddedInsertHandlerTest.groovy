@@ -18,6 +18,7 @@
 package nextflow.sql
 
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentLinkedQueue
 
 import groovy.sql.Sql
 import nextflow.sql.config.SqlDataSource
@@ -121,6 +122,34 @@ class EmbeddedInsertHandlerTest extends Specification {
 
         where:
         driver << ['sqlite', 'duckdb']
+    }
+
+    def 'should insert concurrently with inferred columns on sqlite'() {
+        given:
+        def ds = createTable('sqlite', 'id int primary key, alpha varchar(255)')
+        def errors = new ConcurrentLinkedQueue<Throwable>()
+
+        when:
+        def threads = (0..<4).collect { int t ->
+            Thread.start {
+                def h = new InsertHandler(ds, [into: 'foo'])
+                try {
+                    for( int i=0; i<100; i++ )
+                        h.perform([t*1000+i, 'x'])
+                }
+                catch( Throwable e ) {
+                    errors << e
+                }
+                finally {
+                    try { h.close() }
+                    catch( Throwable e ) { errors << e }
+                }
+            }
+        }
+        threads*.join()
+        then:
+        errors.collect { it.message } == []
+        sql.firstRow('select count(*) as cnt from foo').cnt == 400
     }
 
     def 'should report unknown map columns on #driver'() {
