@@ -21,6 +21,7 @@ import groovy.sql.Sql
 import groovyx.gpars.dataflow.DataflowQueue
 import nextflow.Channel
 import nextflow.Session
+import nextflow.extension.CH
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -41,15 +42,22 @@ class ChannelSqlExtensionTest extends Specification {
         sql.execute("insert into FOO (id, alpha, omega) values (2, 'ciao', 20) ")
         sql.execute("insert into FOO (id, alpha, omega) values (3, 'hello', 30) ")
         and:
+        def igniters = []
         def session = Mock(Session) {
             getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
-            // run the query as soon as it is registered
-            addIgniter(_) >> { Closure action -> action.call() }
+            addIgniter(_) >> { Closure action -> igniters << action }
         }
         def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
+        // subscribe to the channel before running the query
+        def query = { String statement ->
+            def channel = CH.getReadChannel(sqlExtension.fromQuery(statement, db: 'test'))
+            igniters.each { it.call() }
+            igniters.clear()
+            return channel
+        }
 
         when:
-        def result = sqlExtension.fromQuery('select * from FOO', db: 'test')
+        def result = query('select * from FOO')
         then:
         result.val == [1, 'hola', 10]
         result.val == [2, 'ciao', 20]
@@ -57,7 +65,7 @@ class ChannelSqlExtensionTest extends Specification {
         result.val == Channel.STOP
 
         when:
-        result = sqlExtension.fromQuery('select alpha, omega from FOO where id=3', db: 'test')
+        result = query('select alpha, omega from FOO where id=3')
         then:
         result.val == ['hello', 30]
         result.val == Channel.STOP
@@ -80,13 +88,14 @@ class ChannelSqlExtensionTest extends Specification {
         def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
         and:
         def ch = new DataflowQueue()
+
+        when:
+        // subscribe to the output before emitting the source items
+        def ret = CH.getReadChannel(sqlExtension.sqlInsert(ch, [db: 'test', into:'FOO', columns: 'id, alpha']))
         ch.bind( [1, 'x1'] )
         ch.bind( [2, 'y2'] )
         ch.bind( [3, 'z3'] )
         ch.bind( Channel.STOP )
-
-        when:
-        def ret = sqlExtension.sqlInsert(ch, [db: 'test', into:'FOO', columns: 'id, alpha'])
         then:
         ret.val == [1, 'x1']
         ret.val == [2, 'y2']

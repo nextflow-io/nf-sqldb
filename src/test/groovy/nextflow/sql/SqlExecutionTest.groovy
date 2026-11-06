@@ -29,6 +29,7 @@ import groovy.sql.Sql
 import nextflow.Channel
 import nextflow.Global
 import nextflow.Session
+import nextflow.extension.CH
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -612,9 +613,10 @@ class SqlExecutionTest extends Specification {
     // the default database is shared by all tests in the JVM, so use unique table names and drop them
     def 'should keep data in the default database between calls'() {
         given:
+        def igniters = []
         def session = Mock(Session) {
             getConfig() >> [:]
-            addIgniter(_) >> { Closure action -> action.call() }
+            addIgniter(_) >> { Closure action -> igniters << action }
         }
         def sqlExtension = new ChannelSqlExtension()
         sqlExtension.init(session)
@@ -622,7 +624,9 @@ class SqlExecutionTest extends Specification {
         when:
         def createResult = sqlExtension.sqlExecute([statement: 'CREATE TABLE test_default(id INT PRIMARY KEY, name VARCHAR(255))'])
         def insertResult = sqlExtension.sqlExecute([statement: 'INSERT INTO test_default VALUES (1, \'foo\'), (2, \'bar\')'])
-        def query = sqlExtension.fromQuery('SELECT id, name FROM test_default ORDER BY id')
+        // subscribe to the channel before running the query
+        def query = CH.getReadChannel(sqlExtension.fromQuery('SELECT id, name FROM test_default ORDER BY id'))
+        igniters.each { it.call() }
         then:
         createResult == [success: true, result: null]
         insertResult == [success: true, result: 2]

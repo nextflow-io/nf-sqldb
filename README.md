@@ -14,7 +14,7 @@ The following databases are currently supported:
 
 ## Getting started
 
-This plugin requires Nextflow `25.10.0` or later. You can enable the plugin by adding the following snippet to your `nextflow.config` file:
+This plugin requires Nextflow `26.04.0` or later. You can enable the plugin by adding the following snippet to your `nextflow.config` file:
 
 ```groovy
 plugins {
@@ -38,15 +38,18 @@ sql {
 
 ## Usage
 
-The `fromQuery` channel factory and the `sqlInsert` operator move data between a database and a channel, while the `sqlExecute` function runs a single statement directly, such as creating a table, outside of the dataflow.
+The `sqlQuery` function runs a query and returns its rows, while the `sqlExecute` function runs a statement that doesn't return rows, such as creating a table or inserting data.
 
-Use `fromQuery` to query a database and emit a tuple for each row:
+Use `sqlQuery` to query a database. It returns a list of records, one for each row:
 
 ```nextflow
-include { fromQuery } from 'plugin/nf-sqldb'
+include { sqlQuery } from 'plugin/nf-sqldb'
 
-channel.fromQuery('select alpha, delta, omega from SAMPLE', db: 'foo').view()
+channel.fromList(sqlQuery(db: 'foo', query: 'SELECT alpha, delta FROM sample WHERE omega > ?', params: [10]))
+    .view { row -> "${row.alpha} ${row.delta}" }
 ```
+
+The `fromQuery` channel factory is deprecated in favor of `sqlQuery` (see [Migrating from fromQuery](docs/reference.md#migrating-from-fromquery)).
 
 Use `sqlInsert` to insert each item of a channel into a table (deprecated, see [Migrating from sqlInsert](docs/reference.md#migrating-from-sqlinsert)):
 
@@ -67,14 +70,14 @@ include { sqlExecute } from 'plugin/nf-sqldb'
 sqlExecute(db: 'foo', statement: 'CREATE TABLE IF NOT EXISTS sample_table (id INTEGER, name VARCHAR(100))')
 // [success: true, result: null]
 
-sqlExecute(db: 'foo', statement: 'INSERT INTO sample_table (id, name) VALUES (?, ?)', params: [1, 'alpha'])
+sqlExecute(db: 'foo', statement: 'INSERT INTO sample_table (id, name) VALUES (:id, :name)', params: [id: 1, name: 'alpha'])
 // [success: true, result: 1]
 ```
 
 ## Documentation
 
 - [Configuration](docs/configuration.md): database options and the `default` database
-- [Reference](docs/reference.md): all options for `fromQuery`, `sqlInsert`, and `sqlExecute`
+- [Reference](docs/reference.md): all options for `sqlQuery`, `sqlExecute`, `fromQuery`, and `sqlInsert`
 - [Secrets](docs/secrets.md): using Nextflow secrets for database credentials
 - [AWS Athena](docs/aws-athena.md): querying AWS Athena
 - [Querying CSV files](docs/h2-csv.md): querying CSV files with H2

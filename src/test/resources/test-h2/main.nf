@@ -90,13 +90,11 @@ workflow example {
     println "Create table success: ${createResult.success}" // Should be true
 
     // Handle potential failure
-    if (!createResult.success) {
-        println "Failed to create table: ${createResult.error}"
-        return
-    }
+    if (!createResult.success)
+        error("Failed to create table: ${createResult.error}")
 
     // Insert data using sqlInsert
-    Channel
+    channel
         .of([1, 'alpha', 10.5], [2, 'beta', 20.5])
         .sqlInsert(
             db: 'foo',
