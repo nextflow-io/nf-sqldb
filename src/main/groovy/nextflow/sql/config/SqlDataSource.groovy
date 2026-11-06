@@ -17,6 +17,7 @@
 
 package nextflow.sql.config
 
+import groovy.transform.CompileStatic
 import groovy.transform.EqualsAndHashCode
 import groovy.transform.ToString
 import nextflow.config.spec.ConfigOption
@@ -29,6 +30,7 @@ import nextflow.script.dsl.Description
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
+@CompileStatic
 @ToString(includePackage = false, includeNames = true)
 @EqualsAndHashCode
 class SqlDataSource implements ConfigScope {

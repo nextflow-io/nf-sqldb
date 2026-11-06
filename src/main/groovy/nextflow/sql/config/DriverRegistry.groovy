@@ -1,5 +1,6 @@
 package nextflow.sql.config
 
+import groovy.transform.CompileStatic
 
 /**
  * A simple map of driver names and class implementation
@@ -7,6 +8,7 @@ package nextflow.sql.config
  * @author : jorge <jorge.aguilera@seqera.io>
  *
  */
+@CompileStatic
 class DriverRegistry {
 
     Map<String, String> drivers = [:]
