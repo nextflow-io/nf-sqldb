@@ -63,7 +63,7 @@ The following options are available:
 : The database handle. It must be defined under `sql.db` in the Nextflow configuration. If not specified, the `default` database is used (see [Configuration](configuration.md#default-database)).
 
 `into`
-: The target table for inserting the data.
+: The target table for inserting the data, in the form `[[catalog.]schema.]table`, e.g. `myschema.mytable`. On MySQL, a single prefix is the database, e.g. `mydb.mytable`. Quoted identifiers and names containing dots are not supported. When the columns are inferred, each part of the name is matched as written or in the database's default identifier case (but not with a different case for each part).
 
 `columns`
 : The database table column names to be filled with the channel data. The column names order and cardinality must match the tuple values emitted by the channel. The columns can be specified as a list or as a string of comma-separated values.

@@ -22,9 +22,11 @@ import java.sql.DatabaseMetaData
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.sql.SQLFeatureNotSupportedException
+import java.util.concurrent.Callable
 
 import groovy.sql.Sql
 import groovy.transform.CompileStatic
+import groovy.transform.Immutable
 import groovy.transform.Memoized
 import groovy.transform.stc.ClosureParams
 import groovy.transform.stc.SimpleType
@@ -227,22 +229,72 @@ class InsertHandler implements Closeable {
 
     @Memoized
     protected List<String> fetchColNames0(String tableName) {
-        final metaData = getConnection().getMetaData()
-        for( String name : tableNameCandidates(metaData, tableName) ) {
-            final result = queryColNames(metaData, name)
-            if( result )
+        final conn = getConnection()
+        final metaData = conn.getMetaData()
+        final names = TableName.parse(tableName, metaData)
+        final candidates = names.collectMany(it -> tableNameCandidates(metaData, it))
+        // look up an unqualified table in the current catalog and schema first,
+        // then anywhere (e.g. a table in the Postgres search path) as long as it is unique
+        final lookups = new LinkedHashSet<TableName>()
+        if( names.size()==1 && !names[0].qualified ) {
+            final catalog = tryMetadata('current catalog', () -> conn.getCatalog())
+            final schema = tryMetadata('current schema', () -> conn.getSchema())
+            for( TableName it : candidates )
+                lookups.add(new TableName(catalog, schema, it.table))
+        }
+        lookups.addAll(candidates)
+        for( TableName it : lookups ) {
+            final result = queryColNames(metaData, it)
+            if( result != null )
                 return result
         }
         return []
     }
 
-    private static List<String> queryColNames(DatabaseMetaData metaData, String tableName) {
-        final result = [] as List<String>
-        try( final resultSet = metaData.getColumns(null, null, tableName, null) ) {
-            while( resultSet.next() )
-                result.add( resultSet.getString("COLUMN_NAME") )
+    /**
+     * Get the columns of the given table, or null if the table is not found.
+     */
+    private List<String> queryColNames(DatabaseMetaData metaData, TableName name) {
+        final escape = tryMetadata('search string escape', () -> metaData.getSearchStringEscape())
+        final tables = new LinkedHashMap<List<String>,List<String>>()
+        try( final resultSet = metaData.getColumns(name.catalog, escapePattern(name.schema, escape), escapePattern(name.table, escape), null) ) {
+            while( resultSet.next() ) {
+                final key = [resultSet.getString("TABLE_CAT"), resultSet.getString("TABLE_SCHEM"), resultSet.getString("TABLE_NAME")]
+                // drop wildcard matches in case the driver doesn't honour the escape (ignoring case as SQLite does)
+                if( !name.table.equalsIgnoreCase(key[2]) || !matchesPart(name.catalog, key[0]) || !matchesPart(name.schema, key[1]) )
+                    continue
+                tables.computeIfAbsent(key, k -> new ArrayList<String>()).add( resultSet.getString("COLUMN_NAME") )
+            }
         }
-        return result
+        if( tables.size()>1 )
+            throw new IllegalArgumentException("Ambiguous sqlInsert table '$into' - It matches ${tables.keySet().collect(it -> it.findAll().join('.')).join(', ')} - Use a qualified table name or the 'columns' option")
+        return tables ? tables.values().first() : null
+    }
+
+    private static boolean matchesPart(String requested, String actual) {
+        requested == null || actual == null || requested.equalsIgnoreCase(actual)
+    }
+
+    /**
+     * Escape the LIKE wildcards in a metadata search pattern, so that it matches the name exactly.
+     */
+    protected static String escapePattern(String name, String escape) {
+        if( name == null || !escape )
+            return name
+        return name
+            .replace(escape, escape + escape)
+            .replace('_', escape + '_')
+            .replace('%', escape + '%')
+    }
+
+    private static <T> T tryMetadata(String description, Callable<T> action) {
+        try {
+            return action.call()
+        }
+        catch( SQLException | AbstractMethodError | UnsupportedOperationException e ) {
+            log.debug "[SQL] unable to determine the ${description}: ${e.message}"
+            return null
+        }
     }
 
     /**
@@ -250,11 +302,51 @@ class InsertHandler implements Closeable {
      * folded to the identifier case used by the database (since unquoted
      * identifiers are case-insensitive), followed by the name as given.
      */
-    private Collection<String> tableNameCandidates(DatabaseMetaData metaData, String tableName) {
-        final result = new LinkedHashSet<String>()
-        result.add(foldCase(metaData, tableName))
-        result.add(tableName)
+    private Collection<TableName> tableNameCandidates(DatabaseMetaData metaData, TableName name) {
+        final folded = new TableName(
+            name.catalog != null ? foldCase(metaData, name.catalog) : null,
+            name.schema != null ? foldCase(metaData, name.schema) : null,
+            foldCase(metaData, name.table) )
+        final result = new LinkedHashSet<TableName>()
+        result.add(folded)
+        result.add(name)
         return result
+    }
+
+    /**
+     * A table name optionally qualified with a catalog and/or schema.
+     */
+    @Immutable
+    static class TableName {
+        String catalog
+        String schema
+        String table
+
+        boolean isQualified() {
+            catalog != null || schema != null
+        }
+
+        /**
+         * Parse a name of the form {@code [[catalog.]schema.]table} into the possible
+         * interpretations to look up. A single qualifier is a schema, or a catalog if the
+         * database supports catalogs (e.g. MySQL databases, DuckDB attached databases).
+         * An invalid name has no interpretations.
+         */
+        static List<TableName> parse(String name, DatabaseMetaData metaData) {
+            final parts = name.split('\\.', -1) as List<String>
+            if( parts.size()>3 || parts.any(it -> it.isEmpty()) )
+                return []
+            if( parts.size()==3 )
+                return [new TableName(parts[0], parts[1], parts[2])]
+            if( parts.size()==1 )
+                return [new TableName(null, null, name)]
+            final result = new ArrayList<TableName>()
+            if( tryMetadata('schema support', () -> metaData.supportsSchemasInDataManipulation()) != Boolean.FALSE )
+                result.add(new TableName(null, parts[0], parts[1]))
+            if( tryMetadata('catalog support', () -> metaData.supportsCatalogsInDataManipulation()) )
+                result.add(new TableName(parts[0], null, parts[1]))
+            return result ?: [new TableName(null, parts[0], parts[1])]
+        }
     }
 
     private static String foldCase(DatabaseMetaData metaData, String name) {
