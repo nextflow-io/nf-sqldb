@@ -83,3 +83,7 @@ sqlExecute(db: 'foo', statement: 'INSERT INTO sample_table (id, name) VALUES (:i
 - [Querying CSV files](docs/h2-csv.md): querying CSV files with H2
 
 See also the [examples](examples/), the [changelog](CHANGELOG.md), and the [contributing guide](CONTRIBUTING.md).
+
+## License
+
+This project is licensed under the [Apache License 2.0](./COPYING).
