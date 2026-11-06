@@ -4,36 +4,36 @@ All notable changes to the nf-sqldb plugin will be documented here.
 
 See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how to structure this file.
 
-## Unreleased
+## [0.8.0] - 2026-11-06
 
-- Migrate build to the Nextflow Gradle plugin (#42)
-- Require Nextflow 26.04.0 or later, for record support in `sqlQuery` (#43)
-- Plugins that depend on nf-sqldb (via its Maven artifact) must also require Nextflow 26.04.0 or later when upgrading. Version 0.7.1 is the last release that supports older Nextflow versions (25.04 or later)
-- Generate the plugin spec, including the `sql` config scope (#43)
+### Breaking changes
+
+- Require Nextflow 26.04.0 or later (#43). Plugins that depend on the nf-sqldb Maven artifact must also require 26.04.0 when upgrading. Version 0.7.1 is the last release for older Nextflow versions
 - Remove DSL1 support (#41)
-- Run integration tests against Postgres and MySQL (#11)
-- `sqlInsert` now works with DuckDB, which supports batch inserts as of `duckdb_jdbc` 1.3.0.0 (#19)
-- Fix `sqlInsert` with inferred columns to match table and column names ignoring case (e.g. Postgres and MySQL lower-case columns, `into: 'FOO'` on Postgres)
-- Reject `sqlInsert` map records with keys that differ only by case
-- Fix `sqlInsert` with inferred columns merging the columns of same-named tables in other schemas or MySQL databases; unqualified table names are looked up in the current schema first (#44)
-- Support qualified `sqlInsert` table names (e.g. `into: 'myschema.mytable'`, `mydb.mytable` on MySQL, or an attached database on DuckDB) with inferred columns (#44)
-- Fix `sqlInsert` failing on the first full batch with drivers that do not support transactions (e.g. Databricks)
-- Fix `sqlInsert` with inferred columns treating `_` and `%` in table names as wildcards (#44)
-- Fix `sqlInsert` with inferred columns failing with `SQLITE_BUSY` when several `sqlInsert` operators write to the same SQLite database (#21)
-- Map record keys are now matched to the `columns` option ignoring case (previously a key such as `ID` for column `id` inserted NULL)
-- Fix the built-in `default` H2 database losing its data between calls (e.g. a table created with `sqlExecute` was not visible to the next `sqlExecute`, `fromQuery` or `sqlInsert`). Built-in in-memory databases now keep their data for the duration of the run, and a database configured without `url` gets its own in-memory database instead of sharing the `default` one, unless `sql.db.default.url` is set (#50)
-- Don't append a trailing semicolon to queries and statements, which Trino and other JDBC drivers reject (#16)
-- Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment
-- Don't reject paginated queries whose identifiers merely contain `limit` or `offset` (e.g. `rate_limit`)
-- Fix `sqlExecute` returning a row count instead of `null` for multi-line DDL statements
-- Add the `params` option to `sqlExecute` for bind parameters, as a list for positional `?` placeholders or a map for named `:name` placeholders (#22)
-- Add the `batch` option to `sqlExecute` to execute a statement for many sets of bind parameters in a single transaction
-- Deprecate `sqlInsert`, which is not supported with static typing, in favor of `sqlExecute` with `params` or `batch`
-- Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports bind parameters and static typing (#22, #23)
-- Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
-- Accept any collection for the `sqlExecute` `batch` option, such as the output of `collect` under static typing
-- Don't print a duplicate groovy-sql warning to stderr when a `sqlExecute` or `sqlQuery` statement fails
-- Remove Windows native libraries from the bundled DuckDB and SQLite drivers, which aren't used by Nextflow, to reduce the plugin size
+- Remove the `SqlDataSource(Map, SqlDataSource)` constructor and `SqlDataSource.setDEFAULT()`
+- Databases configured without `url` get their own in-memory H2 database instead of sharing the `default` one, unless `sql.db.default.url` is set (#50)
+
+### New features
+
+- Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports static typing (#52)
+- Add the `params` and `batch` options to `sqlExecute`, for bind parameters and batch execution (#51)
+- Validate the `sql` config options, which are now included in the plugin spec (#43)
+
+### Deprecations
+
+- Deprecate `fromQuery` and `sqlInsert`, which are not supported with static typing, in favor of `sqlQuery` and `sqlExecute`
+
+### Fixes
+
+- Fix the built-in `default` H2 database losing its data between calls (#50)
+- Don't append a trailing semicolon to statements, which Trino and other drivers reject (#45)
+- Fix `sqlExecute` returning a row count instead of `null` for multi-line DDL statements (#46)
+- Fix paginated queries (`batchSize`) with a trailing semicolon or comment, or with identifiers containing `limit` or `offset` (#45)
+- Fix `sqlInsert` column inference with case-sensitive names, qualified names, same-named tables in other schemas, and `_` or `%` in table names (#44, #48)
+- Fix `sqlInsert` with DuckDB (#19), with SQLite when several operators write to the same database (#21, #54), and with drivers that don't support transactions, such as Databricks (#55)
+- Fix `sqlExecute` rejecting the output of `collect` as `batch` under static typing (#57)
+- Don't print a duplicate warning to stderr when a statement fails (#58)
+- Reduce the plugin size by removing the Windows native libraries from the bundled DuckDB and SQLite drivers, which Nextflow doesn't use (#59)
 
 ## [0.7.1] - 2025-08-21
 
