@@ -86,7 +86,8 @@ class ChannelSqlExtension extends PluginExtensionPoint {
 
         Options:
         - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
-        - `batchSize`: query the data in batches of the given size (requires `LIMIT` and `OFFSET` support)
+        - `batchSize`: query the data in batches of the given size (requires `LIMIT` and `OFFSET` support, and the query must not already contain `LIMIT` or `OFFSET`)
+        - `batchDelay`: the delay in milliseconds between batches when using `batchSize` (default: `100`)
         - `emitColumns`: when `true`, emit the column names as the first tuple
     ''')
     @Factory
@@ -126,7 +127,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         Options:
         - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
         - `into`: the target table
-        - `columns`: the target column names, as a list or a comma-separated string, matching the tuple values emitted by the channel
+        - `columns`: the target column names, as a list or a comma-separated string, matching the tuple values emitted by the channel (default: inferred from the table columns for tuples, or from the keys for maps)
         - `statement`: the SQL `INSERT` statement to execute, using `?` as a placeholder for each value (overrides `into` and `columns`)
         - `batchSize`: insert the data in batches of the given size (default: `10`)
         - `setup`: a SQL statement to execute before inserting the data, e.g. to create the target table
@@ -167,7 +168,7 @@ class ChannelSqlExtension extends PluginExtensionPoint {
      * @return A map containing 'success' (boolean), 'result' (rows affected or null) and optionally 'error' (message)
      */
     @Description('''
-        The `sqlExecute` function executes a SQL statement that does not return a result set, such as a DDL or DML statement. It returns a map with `success`, `result` (the number of affected rows for DML statements, `null` for DDL statements), and `error` (on failure).
+        The `sqlExecute` function executes a SQL statement that does not return a result set, such as a DDL or DML statement. It returns a map with `success` and either `result` (the number of affected rows for DML statements, `null` for DDL statements) or `error` (on failure). Errors are returned instead of thrown.
 
         Options:
         - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)

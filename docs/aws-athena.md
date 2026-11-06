@@ -28,12 +28,14 @@ sql {
     db {
         athena {
             url = 'jdbc:awsathena://AwsRegion=<YOUR_AWS_REGION>;S3OutputLocation=<YOUR_S3_BUCKET>'
-            user = '<YOUR_AWS_ACCESS_KEY>'
-            password = '<YOUR_AWS_SECRET_KEY>'
+            user = secrets.ATHENA_USER
+            password = secrets.ATHENA_PASSWORD
         }
     }
 }
 ```
+
+The `ATHENA_USER` and `ATHENA_PASSWORD` secrets should contain your AWS access key and secret key, respectively. See [secrets.md](secrets.md) for how to define them.
 
 ### Pipeline
 
@@ -49,7 +51,7 @@ def sqlQuery = """
     LIMIT 10;
     """
 
-Channel.fromQuery(sqlQuery, db: 'athena').view()
+channel.fromQuery(sqlQuery, db: 'athena').view()
 ```
 
 ### Output
