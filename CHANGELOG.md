@@ -31,6 +31,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Deprecate `sqlInsert`, which is not supported with static typing, in favor of `sqlExecute` with `params` or `batch`
 - Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports bind parameters and static typing (#22, #23)
 - Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
+- Reuse the database connection across `sqlQuery` and `sqlExecute` calls, so that calling them for each item of a channel doesn't open a new connection for each call. One idle connection is kept per database (except embedded file and private in-memory databases) until the end of the run. Session state such as temporary tables or `SET` may carry over between calls
 
 ## [0.7.1] - 2025-08-21
 

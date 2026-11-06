@@ -84,10 +84,22 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     // built-in in-memory databases used in this run, closed on session shutdown
     private final Set<SqlDataSource> builtInDataSources = ConcurrentHashMap.<SqlDataSource>newKeySet()
 
+    // connections reused by the SQL functions, closed on session shutdown
+    private final ConnectionCache connections = new ConnectionCache()
+
     protected void init(Session session) {
         this.session = session
         this.config = new SqlConfig((Map) session.config.navigate('sql.db'))
-        session.onShutdown { closeBuiltInDatabases() }
+        session.onShutdown { close() }
+    }
+
+    protected void close() {
+        connections.close()
+        closeBuiltInDatabases()
+    }
+
+    private <T> T withSql(SqlDataSource dataSource, Closure<T> action) {
+        return connections.withConnection(dataSource) { Connection conn -> action.call(new Sql(conn)) }
     }
 
     protected SqlDataSource track(SqlDataSource dataSource) {
@@ -249,12 +261,14 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             return [success: false, error: msg]
         }
         
-        try (Sql sql = Sql.newInstance(dataSource.toMap())) {
+        try {
             final normalizedStatement = statement.trim()
             final isDDL = normalizedStatement ==~ /(?is)(create|alter|drop|truncate)\b.*/
-            final rowsAffected = opts.batch != null
-                ? executeBatch(sql, normalizedStatement, opts.batch as List)
-                : executeStatement(sql, normalizedStatement, opts.params, isDDL)
+            final rowsAffected = withSql(dataSource) { Sql sql ->
+                opts.batch != null
+                    ? executeBatch(sql, normalizedStatement, opts.batch as List)
+                    : executeStatement(sql, normalizedStatement, opts.params, isDDL)
+            }
             return [success: true, result: isDDL ? null : rowsAffected]
         }
         catch (Exception e) {
@@ -364,8 +378,8 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             throw new IllegalArgumentException("Missing required option 'query' for sqlQuery")
         final dbName = dbNameFromOpts(opts)
         final dataSource = dataSourceFromOpts(opts)
-        try( Sql sql = Sql.newInstance(dataSource.toMap()) ) {
-            return executeQuery(sql, query, opts.params)
+        try {
+            return withSql(dataSource) { Sql sql -> executeQuery(sql, query, opts.params) }
         }
         catch( IllegalArgumentException e ) {
             throw e

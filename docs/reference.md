@@ -38,7 +38,7 @@ channel.of('alpha', 'beta')
     .view()
 ```
 
-This opens a connection to the database for each item, which can be slow for many items.
+Consecutive calls reuse the same connection to the database (see [Connections](#connections)).
 
 `sqlQuery` runs as soon as it is called, so it sees the changes made by any `sqlExecute` call before it:
 
@@ -209,7 +209,7 @@ ch.subscribe { r ->
 }
 ```
 
-This opens a connection and commits a transaction for each item, which can be slow for many items.
+This commits a transaction for each item, which can be slow for many items. Consecutive calls reuse the same connection to the database (see [Connections](#connections)).
 
 To insert all items at once, collect them and call `sqlExecute` with `batch`:
 
@@ -314,3 +314,13 @@ The following options are available:
 
 `batch`
 : A list of bind parameters, each a list or a map as for `params` (all of the same kind). The statement is executed once for each item as a JDBC batch, in a single transaction if the database driver supports transactions: if any item fails, the transaction is rolled back and none of the changes are applied. Otherwise (e.g. Databricks), the batch is executed without a transaction and is not atomic: items executed before a failure remain applied. The result is the total number of affected rows, not counting items for which the database driver doesn't report a count. Can't be used together with `params`.
+
+## Connections
+
+The `sqlQuery` and `sqlExecute` functions keep the connection to each database open after a call, so that the next call to the same database can reuse it instead of opening a new connection, until the end of the run. Calls that run at the same time (e.g. from different threads) open separate connections, as needed. Only one connection is kept per database, and the others are closed when their call is done. A connection that has been idle for more than 30 seconds is checked before it is reused, and replaced if it was closed by the server.
+
+A connection is closed instead of kept if the call fails, or if it leaves autocommit disabled. A transaction started with SQL statements (e.g. `BEGIN`) isn't detected by most drivers (e.g. PostgreSQL), so commit or roll back such a transaction in the same call. Other session state set with SQL statements (e.g. `SET` statements or temporary tables) may carry over to later calls, so don't rely on it either way.
+
+Connections to embedded databases stored in a file (e.g. DuckDB, SQLite or H2 file databases) are not kept, so that the file isn't locked between calls. Neither are connections to private in-memory databases, which are created for each connection (e.g. `jdbc:duckdb:`, `jdbc:sqlite::memory:` or an unnamed `jdbc:h2:mem:`), so each call gets a new empty database. Use a named in-memory database (e.g. `jdbc:h2:mem:mydb;DB_CLOSE_DELAY=-1`) or a file database to share data across calls.
+
+The `fromQuery` factory and `sqlInsert` operator don't reuse connections: each opens its own connection, which is used for the whole query or channel.
