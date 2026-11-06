@@ -67,6 +67,12 @@ class SqlDataSource implements ConfigScope {
     ''')
     String password
 
+    @ConfigOption
+    @Description('''
+        The maximum number of connections to the database that the SQL functions can open at the same time (default: `10`). Connections are pooled for the duration of the run. Set to `0` to disable pooling, so that each call opens its own connection. Embedded file databases (e.g. DuckDB, SQLite or H2 files) are not pooled unless this option is set.
+    ''')
+    Integer maxPoolSize
+
     // true when the url is a plugin-managed in-memory H2 database
     private boolean builtIn
 
@@ -76,6 +82,7 @@ class SqlDataSource implements ConfigScope {
         this.driver = opts.driver ?: urlToDriver(url) ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password')
+        this.maxPoolSize = parsePoolSize(opts.maxPoolSize)
     }
 
     /**
@@ -89,10 +96,21 @@ class SqlDataSource implements ConfigScope {
         this.driver = opts.driver ?: urlToDriver(url) ?: fallback.driver ?: DEFAULT_DRIVER
         this.user = resolveCredential(opts.user, 'user') ?: fallback.user ?: DEFAULT_USER
         this.password = resolveCredential(opts.password, 'password') ?: fallback.password
+        final poolSize = parsePoolSize(opts.maxPoolSize)
+        this.maxPoolSize = poolSize != null ? poolSize : fallback.maxPoolSize
     }
 
     static String memUrl(String name) {
         return "jdbc:h2:mem:${name.replaceAll(/[^A-Za-z0-9_]/, '_')};DB_CLOSE_DELAY=-1"
+    }
+
+    private static Integer parsePoolSize(Object value) {
+        if( value == null )
+            return null
+        final result = value.toString().isInteger() ? value.toString().toInteger() : null
+        if( result == null || result < 0 )
+            throw new IllegalArgumentException("Invalid maxPoolSize: '${value}' - it must be a non-negative integer")
+        return result
     }
 
     boolean isBuiltIn() {
@@ -149,6 +167,7 @@ class SqlDataSource implements ConfigScope {
 
     @Override
     String toString() {
-        return "SqlDataSource[url=$url; driver=$driver; user=$user; password=${Bolts.redact(password)}]"
+        final poolSize = maxPoolSize != null ? "; maxPoolSize=$maxPoolSize" : ''
+        return "SqlDataSource[url=$url; driver=$driver; user=$user; password=${Bolts.redact(password)}${poolSize}]"
     }
 }

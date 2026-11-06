@@ -30,6 +30,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Add the `batch` option to `sqlExecute` to execute a statement for many sets of bind parameters in a single transaction
 - Deprecate `sqlInsert`, which is not supported with static typing, in favor of `sqlExecute` with `params` or `batch`
 - Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports bind parameters and static typing (#22, #23)
+- Pool the database connections used by `sqlQuery` and `sqlExecute` (with HikariCP), so that calling them for each item of a channel doesn't open a new connection for each call. Add the `sql.db.<name>.maxPoolSize` config option (default: `10`, `0` to disable pooling). Embedded file databases (DuckDB, SQLite, H2 files) are not pooled unless `maxPoolSize` is set, so that the file isn't kept locked. Behavior change: at most `maxPoolSize` calls run at the same time for each database (others wait up to 5 minutes), session state such as temporary tables or `SET` may carry over between calls on the same connection, and transaction-control SQL (e.g. `BEGIN`) across separate calls isn't supported
 - Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
 
 ## [0.7.1] - 2025-08-21

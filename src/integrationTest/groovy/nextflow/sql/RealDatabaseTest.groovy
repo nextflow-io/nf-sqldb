@@ -17,6 +17,10 @@
 
 package nextflow.sql
 
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
 import groovy.sql.Sql
 import groovyx.gpars.dataflow.DataflowQueue
 import nextflow.Channel
@@ -492,6 +496,61 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
+    def 'should reuse a bounded number of connections on #db'() {
+        given:
+        createTable(db, 'pool1', 'id int primary key, alpha varchar(255)')
+        def ext = extension(db, [maxPoolSize: 3])
+        def executor = Executors.newFixedThreadPool(8)
+        def connectionId = db == mysql ? 'connection_id()' : 'pg_backend_pid()'
+
+        when:
+        def sequential = (1..20).collect { ext.sqlQuery(query: "select ${connectionId} as cid".toString()).first().cid }
+        def futures = (1..200).collect { int i ->
+            executor.submit({ ->
+                final result = ext.sqlExecute(statement: 'insert into pool1(id, alpha) values (?, ?)', params: [i, "r$i".toString()])
+                assert result.success, result.error
+                ext.sqlQuery(query: "select ${connectionId} as cid, alpha from pool1 where id = ?".toString(), params: [i]).first()
+            } as Callable)
+        }
+        def rows = futures.collect { it.get(30, TimeUnit.SECONDS) }
+
+        then:
+        sequential.unique().size() == 1
+        rows*.alpha == (1..200).collect { "r$it".toString() }
+        rows*.cid.unique().size() <= 3
+        sql.firstRow('select count(*) as cnt from pool1').cnt == 200
+
+        cleanup:
+        executor?.shutdownNow()
+        ext?.close()
+
+        where:
+        db << databases
+    }
+
+    def 'should evict a connection left in a transaction on postgres'() {
+        given:
+        createTable(postgres, 'pool2', 'id int primary key')
+        def ext = extension(postgres, [maxPoolSize: 1])
+
+        when: 'a transaction fails'
+        def failed = ext.sqlExecute(statement: 'BEGIN; INSERT INTO pool2 VALUES (1); INSERT INTO pool2 VALUES (1)')
+        then:
+        !failed.success
+        ext.sqlQuery(query: 'SELECT 1 AS x') == [[x: 1]]
+
+        when: 'a transaction is not committed'
+        def begin = ext.sqlExecute(statement: 'BEGIN')
+        def inserted = ext.sqlExecute(statement: 'INSERT INTO pool2 VALUES (2)')
+        then: 'the next call gets a new connection, so the insert is committed'
+        begin.success
+        inserted.success
+        sql.firstRow('select count(*) as n from pool2').n == 1
+
+        cleanup:
+        ext?.close()
+    }
+
     def 'should materialize arrays, text and bytea on postgres'() {
         given:
         createTable(postgres, 'query7', 'id int primary key, t text, b bytea, a int[], n int[][]')
@@ -508,10 +567,10 @@ class RealDatabaseTest extends Specification {
         row.n == [[1, 2], [3, 4]]
     }
 
-    private ChannelSqlExtension extension(Database db) {
+    private ChannelSqlExtension extension(Database db, Map opts=[:]) {
         final ds = db.dataSource
         final session = Mock(Session) {
-            getConfig() >> [sql: [db: [default: [url: ds.url, user: ds.user, password: ds.password]]]]
+            getConfig() >> [sql: [db: [default: [url: ds.url, user: ds.user, password: ds.password] + opts]]]
         }
         final result = new ChannelSqlExtension()
         result.init(session)

@@ -38,7 +38,7 @@ channel.of('alpha', 'beta')
     .view()
 ```
 
-This opens a connection to the database for each item, which can be slow for many items.
+Each call borrows a connection from the connection pool of the database (see [Connections](#connections)), so calling `sqlQuery` for each item doesn't open a new connection each time.
 
 `sqlQuery` runs as soon as it is called, so it sees the changes made by any `sqlExecute` call before it:
 
@@ -209,7 +209,7 @@ ch.subscribe { r ->
 }
 ```
 
-This opens a connection and commits a transaction for each item, which can be slow for many items.
+This commits a transaction for each item, which can be slow for many items. Each call borrows a connection from the connection pool of the database (see [Connections](#connections)).
 
 To insert all items at once, collect them and call `sqlExecute` with `batch`:
 
@@ -314,3 +314,17 @@ The following options are available:
 
 `batch`
 : A list of bind parameters, each a list or a map as for `params` (all of the same kind). The statement is executed once for each item as a JDBC batch, in a single transaction if the database driver supports transactions: if any item fails, the transaction is rolled back and none of the changes are applied. Otherwise (e.g. Databricks), the batch is executed without a transaction and is not atomic: items executed before a failure remain applied. The result is the total number of affected rows, not counting items for which the database driver doesn't report a count. Can't be used together with `params`.
+
+## Connections
+
+The `sqlQuery` and `sqlExecute` functions borrow connections from a connection pool for each database, which is created on first use and closed at the end of the run. Calling these functions for each item of a channel (e.g. in `subscribe` or `flatMap`) reuses the same connections instead of opening a new connection for each call.
+
+At most `maxPoolSize` connections (default: `10`, see [configuration](configuration.md)) are open to each database at the same time. When all connections are in use, a call waits for a connection to be returned, and fails after 5 minutes. Idle connections are closed after 10 minutes, and connections are checked before reuse if they have been idle, so that connections closed by the server are replaced.
+
+Embedded databases stored in a file (e.g. DuckDB, SQLite or H2 file databases) are not pooled by default: each call opens its own connection and closes it when done, so the file is released after each call and process tasks can open it. Set `maxPoolSize` for the database (or under `sql.db.default`) to pool its connections. In that case, idle connections keep DuckDB and H2 files locked for up to 10 minutes after the last call.
+
+Private in-memory databases, which are created for each connection (e.g. `jdbc:duckdb:`, `jdbc:sqlite::memory:` or an unnamed `jdbc:h2:mem:`), are not pooled: each call opens its own connection, and so gets a new empty database. Use a named in-memory database (e.g. `jdbc:h2:mem:mydb;DB_CLOSE_DELAY=-1`) or a file database to share data across calls. Idle connections to named in-memory databases are not closed, since the database may be dropped with its last connection.
+
+Connections are returned to the pool with autocommit enabled and any uncommitted transaction rolled back. A connection is closed instead if the call fails, or if it leaves a transaction open with SQL statements (e.g. `BEGIN` without `COMMIT`), so a transaction can't span several calls. Other session state set with SQL statements (e.g. `SET` statements or temporary tables) may persist to later calls that get the same connection, so don't rely on it either way.
+
+The `fromQuery` factory and `sqlInsert` operator don't use the connection pool: each opens its own connection, which is used for the whole query or channel.

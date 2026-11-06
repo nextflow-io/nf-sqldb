@@ -133,6 +133,38 @@ class SqlDataSourceTest extends Specification {
         ds1.hashCode() != ds3.hashCode()
     }
 
+    def 'should reject invalid maxPoolSize #value' () {
+        when:
+        new SqlDataSource(maxPoolSize: value)
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message == "Invalid maxPoolSize: '${value}' - it must be a non-negative integer"
+
+        where:
+        value << [-1, 'x', 1.5]
+    }
+
+    def 'should accept maxPoolSize 0 to disable pooling' () {
+        expect:
+        new SqlDataSource(maxPoolSize: 0).maxPoolSize == 0
+        new SqlDataSource(maxPoolSize: '0').maxPoolSize == 0
+        and:
+        new SqlDataSource('foo', [url: 'jdbc:h2:x', maxPoolSize: 0], new SqlDataSource(maxPoolSize: 8)).maxPoolSize == 0
+        new SqlDataSource('foo', [url: 'jdbc:h2:x'], new SqlDataSource(maxPoolSize: 0)).maxPoolSize == 0
+    }
+
+    def 'should render maxPoolSize in toString only when set' () {
+        expect:
+        new SqlDataSource(url: 'jdbc:h2:x').toString() == 'SqlDataSource[url=jdbc:h2:x; driver=org.h2.Driver; user=sa; password=null]'
+        new SqlDataSource(url: 'jdbc:h2:x', maxPoolSize: 2).toString() == 'SqlDataSource[url=jdbc:h2:x; driver=org.h2.Driver; user=sa; password=null; maxPoolSize=2]'
+    }
+
+    def 'should key pools by maxPoolSize' () {
+        expect:
+        new SqlDataSource(url: 'jdbc:h2:x', maxPoolSize: 2) == new SqlDataSource(url: 'jdbc:h2:x', maxPoolSize: '2')
+        new SqlDataSource(url: 'jdbc:h2:x', maxPoolSize: 2) != new SqlDataSource(url: 'jdbc:h2:x', maxPoolSize: 3)
+    }
+
     def 'should detect unresolved secrets' () {
         when:
         new SqlDataSource([user: pattern])
