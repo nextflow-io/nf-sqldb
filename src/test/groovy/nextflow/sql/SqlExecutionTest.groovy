@@ -24,6 +24,10 @@ import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLFeatureNotSupportedException
+import java.util.logging.Handler
+import java.util.logging.Level
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 
 import groovy.sql.Sql
 import nextflow.Channel
@@ -219,6 +223,31 @@ class SqlExecutionTest extends Specification {
 
     private static List rows(Sql sql, String table) {
         sql.rows("SELECT id, name, val FROM $table ORDER BY id".toString()).collect { [it.id, it.name, it.val] }
+    }
+
+    def 'should not log failed statements with groovy-sql'() {
+        given:
+        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
+        def ext = extension(JDBC_URL)
+        def records = []
+        def handler = new Handler() {
+            void publish(LogRecord record) { records << record }
+            void flush() {}
+            void close() {}
+        }
+        def logger = Logger.getLogger(Sql.name)
+        logger.addHandler(handler)
+
+        when:
+        def result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO missing VALUES (1)')
+        ext.sqlQuery(db: 'test', query: 'SELECT * FROM missing')
+        then:
+        thrown(IllegalStateException)
+        !result.success
+        records.findAll { it.level.intValue() >= Level.WARNING.intValue() } == []
+
+        cleanup:
+        logger.removeHandler(handler)
     }
 
     def 'should execute statement with positional params'() {

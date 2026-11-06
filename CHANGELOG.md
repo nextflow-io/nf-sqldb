@@ -32,6 +32,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Add the `sqlQuery` function, which returns the rows of a query as a list of records and supports bind parameters and static typing (#22, #23)
 - Deprecate `fromQuery`, which is not supported with static typing, in favor of `channel.fromList(sqlQuery(...))`
 - Accept any collection for the `sqlExecute` `batch` option, such as the output of `collect` under static typing
+- Don't print a duplicate groovy-sql warning to stderr when a `sqlExecute` or `sqlQuery` statement fails
 
 ## [0.7.1] - 2025-08-21
 
