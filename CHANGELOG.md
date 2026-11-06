@@ -6,6 +6,7 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 
 ## Unreleased
 
+- Add release workflow (#49)
 - Migrate build to the Nextflow Gradle plugin (#42)
 - Require Nextflow 25.10.0 or later (#43)
 - Generate the plugin spec, including the `sql` config scope (#43)

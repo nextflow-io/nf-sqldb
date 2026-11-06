@@ -30,15 +30,19 @@ nextflow run examples/sql-execution -plugins nf-sqldb@<version>
 
 ## Publishing
 
-Follow these steps to package, upload, and publish the plugin:
+Follow these steps to publish a new version of the plugin:
 
 1. Update the [version file](./VERSION).
 
-2. Update the [changelog](./CHANGELOG.md).
+2. Update the [changelog](./CHANGELOG.md): rename `## Unreleased` to `## [<version>] - <YYYY-MM-DD>`.
 
-3. Run `make release` to build and publish the plugin. This task requires the following credentials:
+3. Merge these changes into `master` as a single commit with the message `Release <version>` (e.g. `Release 0.8.0`).
 
-   * `NPR_API_KEY` (or the `npr.apiKey` Gradle property): API key for the [Nextflow plugin registry](https://registry.nextflow.io).
-   * `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (or the `aws_access_key_id` and `aws_secret_access_key` Gradle properties): AWS credentials with write access to the `s3://maven.seqera.io` Maven repository, where the plugin jar is published as `io.nextflow:nf-sqldb` for downstream plugins such as nf-databricks and nf-trino.
+4. Run the [Release](https://github.com/nextflow-io/nf-sqldb/actions/workflows/release.yml) workflow on `master`. It runs the unit tests and then, depending on the selected options:
 
-4. Make a [GitHub release](https://github.com/nextflow-io/nf-sqldb/releases).
+   * **Publish to the plugin registry**: publishes the plugin to the [Nextflow plugin registry](https://registry.nextflow.io) and creates a GitHub release for the version. Snapshot versions are rejected.
+   * **Publish to Maven**: publishes the plugin jar as `io.nextflow:nf-sqldb` to the `s3://maven.seqera.io` Maven repository, for downstream plugins such as nf-databricks and nf-trino. Snapshot versions are published to the snapshots repository.
+
+   Versions that were already published are skipped, so the workflow can be re-run after a partial failure.
+
+The workflow requires the `NPR_API_KEY` and `SEQERA_MAVEN_SECRET_KEY` secrets and the `SEQERA_MAVEN_ACCESS_KEY` variable. To release locally instead, set `NPR_API_KEY`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` and run `make release`.
