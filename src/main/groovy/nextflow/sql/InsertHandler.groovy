@@ -90,6 +90,16 @@ class InsertHandler implements Closeable {
         }
     }
 
+    private void safeRollback(Connection connection) {
+        try {
+            if( !connection.getAutoCommit() )
+                connection.rollback()
+        }
+        catch(SQLException e) {
+            log.debug "[SQL] unable to end the read transaction, continuing: ${e.message}"
+        }
+    }
+
     private Connection getConnection() {
         if( connection == null ) {
             connection = Sql.newInstance(ds.toMap()).getConnection()
@@ -150,6 +160,9 @@ class InsertHandler implements Closeable {
         if( sqlStatement )
             return sqlStatement
         sqlStatement = makeStatement(entry)
+        // end the read transaction from inferring the columns, otherwise SQLite fails with SQLITE_BUSY on the first write
+        if( connection != null )
+            safeRollback(connection)
         log.debug "[SQL] sqlInsert statement: \"${sqlStatement}\""
         return sqlStatement
     }
