@@ -48,7 +48,7 @@ include { fromQuery } from 'plugin/nf-sqldb'
 channel.fromQuery('select alpha, delta, omega from SAMPLE', db: 'foo').view()
 ```
 
-Use `sqlInsert` to insert each item of a channel into a table:
+Use `sqlInsert` to insert each item of a channel into a table (deprecated, see [Migrating from sqlInsert](docs/reference.md#migrating-from-sqlinsert)):
 
 ```nextflow
 include { sqlInsert } from 'plugin/nf-sqldb'
@@ -67,7 +67,7 @@ include { sqlExecute } from 'plugin/nf-sqldb'
 sqlExecute(db: 'foo', statement: 'CREATE TABLE IF NOT EXISTS sample_table (id INTEGER, name VARCHAR(100))')
 // [success: true, result: null]
 
-sqlExecute(db: 'foo', statement: "INSERT INTO sample_table (id, name) VALUES (1, 'alpha')")
+sqlExecute(db: 'foo', statement: 'INSERT INTO sample_table (id, name) VALUES (?, ?)', params: [1, 'alpha'])
 // [success: true, result: 1]
 ```
 

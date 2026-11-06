@@ -23,6 +23,9 @@ See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how t
 - Fix paginated queries (`batchSize`) with a trailing semicolon, newline or `--` comment
 - Don't reject paginated queries whose identifiers merely contain `limit` or `offset` (e.g. `rate_limit`)
 - Fix `sqlExecute` returning a row count instead of `null` for multi-line DDL statements
+- Add the `params` option to `sqlExecute` for bind parameters, as a list for positional `?` placeholders or a map for named `:name` placeholders (#22)
+- Add the `batch` option to `sqlExecute` to execute a statement for many sets of bind parameters in a single transaction
+- Deprecate `sqlInsert`, which is not supported with static typing, in favor of `sqlExecute` with `params` or `batch`
 
 ## [0.7.1] - 2025-08-21
 

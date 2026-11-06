@@ -420,6 +420,26 @@ class RealDatabaseTest extends Specification {
         db << databases
     }
 
+    def 'should execute statements with params and batch on #db'() {
+        given:
+        createTable(db, 'exec3', 'id int primary key, alpha varchar(255), omega int')
+        def ext = extension(db)
+
+        expect:
+        ext.sqlExecute(statement: 'insert into exec3(id, alpha, omega) values (?, ?, ?)', params: [1, "it's", null]) == [success: true, result: 1]
+        ext.sqlExecute(statement: 'insert into exec3(id, alpha, omega) values (:id, :alpha, :omega)', params: [id: 2, alpha: 'b', omega: 2]) == [success: true, result: 1]
+        ext.sqlExecute(statement: 'insert into exec3(id, alpha) values (?, ?)', batch: (3..1200).collect { [it, "r$it"] }) == [success: true, result: 1198]
+        ext.sqlExecute(statement: 'update exec3 set omega = :omega where id = :id', batch: [[id: 1, omega: 10], [id: 3, omega: 30], [id: 9999, omega: 0]]) == [success: true, result: 2]
+
+        and: 'a failed batch is rolled back'
+        ext.sqlExecute(statement: 'insert into exec3(id, alpha) values (?, ?)', batch: [[5000, 'x'], [1, 'dup']]).success == false
+        sql.firstRow('select count(*) as cnt from exec3').cnt == 1200
+        sql.rows('select id, alpha, omega from exec3 where id <= 3 order by id').collect { [it.id, it.alpha, it.omega] } == [[1, "it's", 10], [2, 'b', 2], [3, 'r3', 30]]
+
+        where:
+        db << databases
+    }
+
     private ChannelSqlExtension extension(Database db) {
         final ds = db.dataSource
         final session = Mock(Session) {
