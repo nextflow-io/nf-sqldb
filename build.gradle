@@ -148,6 +148,7 @@ publishing {
             credentials(AwsCredentials) {
                 accessKey = project.findProperty('aws_access_key_id') ?: System.getenv('AWS_ACCESS_KEY_ID')
                 secretKey = project.findProperty('aws_secret_access_key') ?: System.getenv('AWS_SECRET_ACCESS_KEY')
+                sessionToken = System.getenv('AWS_SESSION_TOKEN')
             }
         }
     }

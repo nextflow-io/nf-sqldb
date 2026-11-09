@@ -1,0 +1,110 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      publish_registry:
+        description: 'Publish the plugin to the Nextflow plugin registry and create a GitHub release (skipped if the version already exists)'
+        type: boolean
+        default: true
+      publish_maven:
+        description: 'Publish the plugin jar to the Seqera Maven repository (s3://maven.seqera.io)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish nf-sqldb
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Java 21
+        uses: actions/setup-java@0f62d2ad8407a414cddd4790bed06fd9ebda0f56 # ratchet:actions/setup-java@v1
+        with:
+          java-version: 21
+          architecture: x64
+          distribution: 'temurin'
+
+      - name: Version
+        id: version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "::error::Refusing to publish snapshot version $VERSION"
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: make check
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+
+      - name: Publish to plugin registry
+        if: inputs.publish_registry
+        run: ./gradlew releasePluginIfNotExists
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+          NPR_API_URL: ${{ vars.NPR_API_URL }}
+          NPR_API_KEY: ${{ secrets.NPR_API_KEY }}
+
+      - name: Configure AWS credentials
+        if: inputs.publish_maven
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # ratchet:aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::195996028523:role/NfSqldbMavenPublisherRole
+          aws-region: eu-west-1
+
+      # releases are immutable, so skip the upload if the version is already published
+      - name: Publish to Maven
+        if: inputs.publish_maven
+        run: |
+          POM_URL="https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases/io/nextflow/nf-sqldb/$VERSION/nf-sqldb-$VERSION.pom"
+          if curl -sfI -o /dev/null "$POM_URL"; then
+            echo "nf-sqldb $VERSION already exists in the Maven repository - skipping upload"
+            exit 0
+          fi
+          ./gradlew publishMavenPublicationToMavenRepository
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+
+  github-release:
+    name: GitHub release
+    needs: publish
+    if: inputs.publish_registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub release
+        run: |
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            echo "GitHub release $VERSION already exists - skipping"
+            exit 0
+          fi
+          gh release create "$VERSION" --target "$GITHUB_SHA" --title "Version $VERSION" --generate-notes
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
