@@ -38,11 +38,11 @@ Follow these steps to publish a new version of the plugin:
 
 3. Merge these changes into `master` as a single commit with the message `Release <version>` (e.g. `Release 0.8.0`).
 
-4. Run the [Release](https://github.com/nextflow-io/nf-sqldb/actions/workflows/release.yml) workflow on `master`. It runs the unit tests and then, depending on the selected options:
+4. Run the [Release](https://github.com/nextflow-io/nf-sqldb/actions/workflows/release.yml) workflow on `master`. Snapshot versions are rejected. The workflow runs the unit tests and then, depending on the selected options:
 
-   * **Publish to the plugin registry**: publishes the plugin to the [Nextflow plugin registry](https://registry.nextflow.io) and creates a GitHub release for the version. Snapshot versions are rejected.
-   * **Publish to Maven**: publishes the plugin jar as `io.nextflow:nf-sqldb` to the `s3://maven.seqera.io` Maven repository, for downstream plugins such as nf-databricks and nf-trino. Snapshot versions are published to the snapshots repository.
+   * **Publish to the plugin registry**: publishes the plugin to the [Nextflow plugin registry](https://registry.nextflow.io) and creates a GitHub release for the version.
+   * **Publish to Maven**: publishes the plugin jar as `io.nextflow:nf-sqldb` to the `s3://maven.seqera.io` Maven repository, for downstream plugins such as nf-databricks and nf-trino.
 
    Versions that were already published are skipped, so the workflow can be re-run after a partial failure.
 
-The workflow requires the `NPR_API_KEY` and `SEQERA_MAVEN_SECRET_KEY` secrets and the `SEQERA_MAVEN_ACCESS_KEY` variable. To release locally instead, set `NPR_API_KEY`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` and run `make release`.
+The workflow requires the `NPR_API_KEY` secret. For Maven, it assumes an AWS IAM role through GitHub OIDC, so no AWS secrets are needed. To release locally instead, set `NPR_API_KEY`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` and run `make release`.
