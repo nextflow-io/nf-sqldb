@@ -47,10 +47,6 @@ This software includes source code and libraries developed by:
     https://github.com/xerial/sqlite-jdbc
     https://search.maven.org/artifact/org.xerial/sqlite-jdbc/3.36.0.3/jar
 
-    DuckDB JDBC driver
-    Licensed under the MIT license
-    https://search.maven.org/artifact/org.duckdb/duckdb_jdbc/0.3.0/jar
-
     Magnitude Simba Athena JDBC driver
     https://docs.aws.amazon.com/athena/latest/ug/connect-with-jdbc.html#atelong-jdbc-driver-license-agreement
     https://s3.amazonaws.com/athena-downloads/drivers/JDBC/SimbaAthenaJDBC-2.0.27.1000/doc/LICENSE.txt

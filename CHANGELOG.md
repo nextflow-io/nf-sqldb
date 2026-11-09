@@ -4,6 +4,12 @@ All notable changes to the nf-sqldb plugin will be documented here.
 
 See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how to structure this file.
 
+## Unreleased
+
+### Breaking changes
+
+- Remove the bundled DuckDB JDBC driver. Use the nf-duckdb plugin for DuckDB instead (#60)
+
 ## [0.8.0] - 2026-11-06
 
 ### Breaking changes

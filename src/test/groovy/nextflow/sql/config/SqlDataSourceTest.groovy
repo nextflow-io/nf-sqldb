@@ -68,7 +68,6 @@ class SqlDataSourceTest extends Specification {
         'jdbc:h2:mem:'                  | 'org.h2.Driver'
         'jdbc:mysql:some-host'          | 'com.mysql.cj.jdbc.Driver'
         'jdbc:mariadb:other-host'       | 'org.mariadb.jdbc.Driver'
-        'jdbc:duckdb:'                  | 'org.duckdb.DuckDBDriver'
         'jdbc:awsathena:'               | 'com.simba.athena.jdbc.Driver'
     }
 

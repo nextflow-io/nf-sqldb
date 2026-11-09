@@ -22,12 +22,11 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import groovy.sql.Sql
 import nextflow.sql.config.SqlDataSource
-import spock.lang.PendingFeature
 import spock.lang.Specification
 import spock.lang.TempDir
 
 /**
- * Run the core InsertHandler tests against the embedded SQLite and DuckDB databases.
+ * Run the core InsertHandler tests against the embedded SQLite database.
  */
 class EmbeddedInsertHandlerTest extends Specification {
 
@@ -44,7 +43,6 @@ class EmbeddedInsertHandlerTest extends Specification {
 
     private SqlDataSource createTable(String driver, String columns) {
         final ds = new SqlDataSource([url: "jdbc:${driver}:${tempDir.resolve('test.db')}".toString()])
-        // use the same connection settings as the handler, since DuckDB rejects mixed configurations
         sql = Sql.newInstance(ds.toMap())
         sql.execute("create table foo($columns)".toString())
         return ds
@@ -67,7 +65,7 @@ class EmbeddedInsertHandlerTest extends Specification {
         rows('id, alpha, omega') == [[1, 'a', null], [2, 'b', null]]
 
         where:
-        driver << ['sqlite', 'duckdb']
+        driver << ['sqlite']
     }
 
     def 'should insert tuples with inferred columns into #into on #driver'() {
@@ -86,7 +84,6 @@ class EmbeddedInsertHandlerTest extends Specification {
         driver   | into
         'sqlite' | 'foo'
         'sqlite' | 'FOO'
-        'duckdb' | 'foo'
     }
 
     def 'should insert maps with inferred columns into #into on #driver'() {
@@ -106,7 +103,6 @@ class EmbeddedInsertHandlerTest extends Specification {
         driver   | into
         'sqlite' | 'foo'
         'sqlite' | 'FOO'
-        'duckdb' | 'foo'
     }
 
     def 'should insert maps with explicit columns ignoring key case on #driver'() {
@@ -121,7 +117,7 @@ class EmbeddedInsertHandlerTest extends Specification {
         rows('id, alpha') == [[1, 'a']]
 
         where:
-        driver << ['sqlite', 'duckdb']
+        driver << ['sqlite']
     }
 
     def 'should insert concurrently with inferred columns on sqlite'() {
@@ -164,7 +160,7 @@ class EmbeddedInsertHandlerTest extends Specification {
         e.message.startsWith("Unknown columns for table 'foo': beta")
 
         where:
-        driver << ['sqlite', 'duckdb']
+        driver << ['sqlite']
     }
 
     def 'should not treat underscore in table name as a wildcard on #driver'() {
@@ -182,58 +178,6 @@ class EmbeddedInsertHandlerTest extends Specification {
         sql.rows('select id from w_1').id == [1]
 
         where:
-        driver << ['sqlite', 'duckdb']
-    }
-
-    def 'should infer columns of #into on duckdb'() {
-        given:
-        def ds = createTable('duckdb', 'id int primary key, alpha varchar(255)')
-        sql.execute('create schema s1')
-        sql.execute('create table s1.foo(id int primary key, beta varchar(255))')
-        handler = new InsertHandler(ds, [into: into])
-
-        when:
-        handler.perform([1, 'x'])
-        handler.close()
-        then:
-        handler.getSqlStatement([]) == "insert into $into ( id,$column ) values ( ?,? )"
-        sql.rows("select id, $column as v from $into".toString()).collect { [it.id, it.v] } == [[1, 'x']]
-
-        where:
-        into     | column
-        'foo'    | 'alpha'
-        's1.foo' | 'beta'
-    }
-
-    def 'should infer columns of a table in an attached database on duckdb'() {
-        given:
-        def other = tempDir.resolve('other.db')
-        def otherSql = Sql.newInstance("jdbc:duckdb:$other".toString())
-        otherSql.execute('create table t(id int primary key, beta varchar(255))')
-        otherSql.close()
-        def ds = createTable('duckdb', 'id int primary key, alpha varchar(255)')
-        sql.execute('create table t(id int primary key, gamma varchar(255))')
-        handler = new InsertHandler(ds, [into: 'other.t', setup: "attach '$other' as other".toString()])
-
-        when:
-        handler.perform([1, 'x'])
-        handler.close()
-        then:
-        handler.getSqlStatement([]) == 'insert into other.t ( id,beta ) values ( ?,? )'
-        sql.rows('select id, beta from other.t').collect { [it.id, it.beta] } == [[1, 'x']]
-    }
-
-    // DuckDB reports that it stores mixed-case identifiers, but table lookups in its metadata are case-sensitive
-    @PendingFeature
-    def 'should infer columns with upper-case table name on duckdb'() {
-        given:
-        def ds = createTable('duckdb', 'id int primary key, alpha varchar(255)')
-        handler = new InsertHandler(ds, [into: 'FOO'])
-
-        when:
-        handler.perform([id: 1, alpha: 'a'])
-        handler.close()
-        then:
-        rows('id, alpha') == [[1, 'a']]
+        driver << ['sqlite']
     }
 }

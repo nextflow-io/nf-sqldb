@@ -274,6 +274,6 @@ class SqlQueryTest extends Specification {
         dir.deleteDir()
 
         where:
-        driver << ['sqlite', 'duckdb']
+        driver << ['sqlite']
     }
 }

@@ -5,12 +5,13 @@ This plugin provides support for interacting with SQL databases in Nextflow scri
 The following databases are currently supported:
 
 - [AWS Athena](https://aws.amazon.com/athena/) (Setup guide [here](docs/aws-athena.md))
-- [DuckDB](https://duckdb.org/)
 - [H2](https://www.h2database.com)
 - [MySQL](https://www.mysql.com/)
 - [MariaDB](https://mariadb.org/)
 - [PostgreSQL](https://www.postgresql.org/)
 - [SQLite](https://www.sqlite.org/index.html)
+
+For [DuckDB](https://duckdb.org/), use the [nf-duckdb](https://github.com/nextflow-io/nf-duckdb) plugin.
 
 ## Getting started
 
