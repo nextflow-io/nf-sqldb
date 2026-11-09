@@ -25,7 +25,7 @@ The following options are available:
 : The database connection URL based on the [JDBC standard](https://docs.oracle.com/javase/tutorial/jdbc/basics/connecting.html#db_connection_url).
 
 `sql.db.'<DB-NAME>'.driver`
-: The database driver class name (optional). If not specified, the driver is inferred from the JDBC URL for the following databases: AWS Athena (`jdbc:awsathena:`), DuckDB (`jdbc:duckdb:`), H2 (`jdbc:h2:`), MariaDB (`jdbc:mariadb:`), MySQL (`jdbc:mysql:`), PostgreSQL (`jdbc:postgresql:`), and SQLite (`jdbc:sqlite:`).
+: The database driver class name (optional). If not specified, the driver is inferred from the JDBC URL for the following databases: AWS Athena (`jdbc:awsathena:`), H2 (`jdbc:h2:`), MariaDB (`jdbc:mariadb:`), MySQL (`jdbc:mysql:`), PostgreSQL (`jdbc:postgresql:`), and SQLite (`jdbc:sqlite:`).
 
 `sql.db.'<DB-NAME>'.user`
 : The database connection user name.

@@ -1,10 +1,3 @@
-import java.nio.file.FileSystems
-import java.nio.file.Path
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
-import org.gradle.api.artifacts.transform.TransformParameters
-
 plugins {
     id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.16'
     id 'maven-publish'
@@ -63,61 +56,6 @@ tasks.register('extractAthenaDriver', Copy) {
     into athenaJar.map { it.asFile.parentFile }
 }
 
-// Nextflow doesn't run natively on Windows, so the Windows native libraries are stripped
-// from the bundled JDBC drivers to keep the plugin zip under the registry size limit
-abstract class StripWindowsNatives implements TransformAction<TransformParameters.None> {
-    static final Map<String,String> PATTERNS = [
-        'duckdb_jdbc-': 'libduckdb_java.so_windows_*',
-        'sqlite-jdbc-': 'org/sqlite/native/Windows/**',
-    ]
-
-    @InputArtifact
-    abstract Provider<FileSystemLocation> getInputArtifact()
-
-    @Override
-    void transform(TransformOutputs outputs) {
-        final input = inputArtifact.get().asFile
-        final pattern = PATTERNS.find { prefix, glob -> input.name.startsWith(prefix) }?.value
-        if( !pattern ) {
-            outputs.file(inputArtifact)
-            return
-        }
-        final matcher = FileSystems.default.getPathMatcher("glob:${pattern}")
-        int stripped = 0
-        new ZipFile(input).withCloseable { zip ->
-            new ZipOutputStream(outputs.file(input.name).newOutputStream()).withCloseable { out ->
-                for( final entry : zip.entries() ) {
-                    if( matcher.matches(Path.of(entry.name)) ) {
-                        stripped++
-                        continue
-                    }
-                    final copy = new ZipEntry(entry.name)
-                    copy.time = entry.time
-                    out.putNextEntry(copy)
-                    out << zip.getInputStream(entry)
-                    out.closeEntry()
-                }
-            }
-        }
-        if( !stripped )
-            throw new GradleException("No entries matching '${pattern}' in ${input.name} -- update the patterns in build.gradle")
-    }
-}
-
-def windowsStripped = Attribute.of('io.nextflow.windowsStripped', Boolean)
-
-dependencies {
-    attributesSchema { attribute(windowsStripped) }
-    artifactTypes.getByName('jar').attributes.attribute(windowsStripped, false)
-    registerTransform(StripWindowsNatives) {
-        from.attribute(windowsStripped, false)
-        to.attribute(windowsStripped, true)
-    }
-}
-
-// the plugin zip bundles the runtime classpath into lib/
-configurations.runtimeClasspath.attributes.attribute(windowsStripped, true)
-
 dependencies {
     compileOnly 'org.slf4j:slf4j-api:2.0.16'
     compileOnly 'org.pf4j:pf4j:3.12.0'
@@ -128,7 +66,6 @@ dependencies {
     api 'org.mariadb.jdbc:mariadb-java-client:2.7.0'
     api 'org.postgresql:postgresql:42.7.5'
     api 'org.xerial:sqlite-jdbc:3.49.1.0'
-    api 'org.duckdb:duckdb_jdbc:1.3.0.0'
     api files(athenaJar) { builtBy 'extractAthenaDriver' }
 
     testImplementation 'org.apache.groovy:groovy-nio:4.0.26'

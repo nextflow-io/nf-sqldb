@@ -25,7 +25,6 @@ class DriverRegistry {
         drivers.'mysql'= 'com.mysql.cj.jdbc.Driver'
         drivers.'mariadb'= 'org.mariadb.jdbc.Driver'
         drivers.'postgresql'= 'org.postgresql.Driver'
-        drivers.'duckdb'= 'org.duckdb.DuckDBDriver'
         drivers.'awsathena'= 'com.simba.athena.jdbc.Driver'
     }
 
