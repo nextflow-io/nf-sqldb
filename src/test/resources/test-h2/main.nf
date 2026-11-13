@@ -4,8 +4,7 @@
  * Example script demonstrating how to use the SQL sqlExecute function
  */
 
-include { sqlExecute } from 'plugin/nf-sqldb'
-include { fromQuery } from 'plugin/nf-sqldb'
+include { sqlExecute; sqlQuery } from 'plugin/nf-sqldb'
 
 // Define database configuration in nextflow.config file
 // sql.db.demo = [url: 'jdbc:h2:mem:demo', driver: 'org.h2.Driver']
@@ -71,8 +70,8 @@ workflow {
     // Step 5: Query results
     log.info "Querying results..."
     channel
-        .fromQuery("SELECT * FROM TEST_TABLE ORDER BY ID", db: 'demo')
-        .view { row -> "ID: ${row[0]}, Name: ${row[1]}, Value: ${row[2]}" }
+        .fromList(sqlQuery(db: 'demo', query: 'SELECT * FROM TEST_TABLE ORDER BY ID'))
+        .view { row -> "ID: ${row.id}, Name: ${row.name}, Value: ${row.value}" }
 }
 
 workflow example {
@@ -93,17 +92,15 @@ workflow example {
     if (!createResult.success)
         error("Failed to create table: ${createResult.error}")
 
-    // Insert data using sqlInsert
-    channel
-        .of([1, 'alpha', 10.5], [2, 'beta', 20.5])
-        .sqlInsert(
-            db: 'foo',
-            into: 'sample_table',
-            columns: 'id, name, value'
-        )
+    // Insert data using sqlExecute with a batch of bind parameters
+    sqlExecute(
+        db: 'foo',
+        statement: 'INSERT INTO sample_table (id, name, value) VALUES (?, ?, ?)',
+        batch: [[1, 'alpha', 10.5], [2, 'beta', 20.5]]
+    )
 
-    // Query data using fromQuery
-    fromQuery('SELECT * FROM sample_table', db: 'foo')
+    // Query data using sqlQuery
+    channel.fromList(sqlQuery(db: 'foo', query: 'SELECT * FROM sample_table'))
         .view()
 
     // Update data using sqlExecute (DML operation returns affected row count in result field)

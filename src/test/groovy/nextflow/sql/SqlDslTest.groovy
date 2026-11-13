@@ -85,7 +85,7 @@ class SqlDslTest extends Dsl2Spec {
         PluginExtensionProvider.reset()
         pluginsMode ? System.setProperty('pf4j.mode',pluginsMode) : System.clearProperty('pf4j.mode')
     }
-    def 'should perform a query and create a channel' () {
+    def 'should query a db table in a script' () {
         given:
         def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -99,27 +99,24 @@ class SqlDslTest extends Dsl2Spec {
 
         when:
         def SCRIPT = '''
-            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
+            include { sqlQuery } from 'plugin/nf-sqldb'
             workflow {
                 def table = 'FOO'
-                def sql = "select * from $table"
-                channel.fromQuery(sql, db: "test") 
+                channel.fromList(sqlQuery(db: 'test', query: "select * from $table where id > ? order by id", params: [1]))
             }
             '''
         and:
         def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
-        result.val == [1, 'hola', 10]
-        result.val == [2, 'ciao', 20]
-        result.val == [3, 'hello', 30]
+        result.val == [id: 2, alpha: 'ciao', omega: 20]
+        result.val == [id: 3, alpha: 'hello', omega: 30]
         result.val == Channel.STOP
 
         cleanup:
         sql?.close()
     }
 
-
-    def 'should insert channel data into a db table' () {
+    def 'should insert channel data into a db table in a script' () {
         given:
         def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
         def sql = Sql.newInstance(JDBC_URL, 'sa', null)
@@ -130,96 +127,22 @@ class SqlDslTest extends Dsl2Spec {
 
         when:
         def SCRIPT = '''
-            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
+            include { sqlExecute } from 'plugin/nf-sqldb'
             workflow {
                 channel
                   .of(100,200,300)
-                  .sqlInsert(into:"FOO", columns:'id', db:"ds1")
+                  .collect()
+                  .map { ids -> sqlExecute(db: 'ds1', statement: 'insert into FOO (id) values (?)', batch: ids.collect { id -> [id] }) }
             }
             '''
         and:
         def result = ScriptHelper.runScript(SCRIPT, config: config)
         then:
-        result.val == 100
-        result.val == 200
-        result.val == 300
-        result.val == Channel.STOP
+        result.val == [success: true, result: 3]
         and:
-        def rows =  sql.rows("select id from FOO;")
+        def rows =  sql.rows("select id from FOO order by id;")
         and:
-        rows.size() == 3
         rows.id == [100, 200, 300]
-
-        cleanup:
-        sql?.close()
-    }
-
-    def 'should insert channel data into a db table in batches' () {
-        given:
-        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
-        and:
-        sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
-        and:
-        def config = [sql: [db: [ds1: [url: JDBC_URL]]]]
-
-        when:
-        def SCRIPT = '''
-            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            workflow {
-                channel
-                  .of(100,200,300,400,500)
-                  .sqlInsert(into:'FOO', columns:'id', db:'ds1', batchSize: 2)
-            }
-            '''
-        and:
-        def result = ScriptHelper.runScript(SCRIPT, config: config)
-        then:
-        result.val == 100
-        result.val == 200
-        result.val == 300
-        result.val == 400
-        result.val == 500
-        result.val == Channel.STOP
-        and:
-        def rows =  sql.rows("select id from FOO;")
-        and:
-        rows.size() == 5
-        rows.id == [100, 200, 300, 400, 500]
-
-        cleanup:
-        sql?.close()
-    }
-
-    def 'should perform a query with headers and create a channel' () {
-        given:
-        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
-        and:
-        sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
-        sql.execute("insert into FOO (id, alpha, omega) values (1, 'hola', 10) ")
-        sql.execute("insert into FOO (id, alpha, omega) values (2, 'ciao', 20) ")
-        sql.execute("insert into FOO (id, alpha, omega) values (3, 'hello', 30) ")
-        and:
-        def config = [sql: [db: [test: [url: JDBC_URL]]]]
-
-        when:
-        def SCRIPT = '''
-            include { fromQuery; sqlInsert } from 'plugin/nf-sqldb'
-            workflow {
-                def table = 'FOO'
-                def sql = "select * from $table"
-                channel.fromQuery(sql, db: "test", emitColumns:true) 
-            }
-            '''
-        and:
-        def result = ScriptHelper.runScript(SCRIPT, config: config)
-        then:
-        result.val == ['ID', 'ALPHA', 'OMEGA']
-        result.val == [1, 'hola', 10]
-        result.val == [2, 'ciao', 20]
-        result.val == [3, 'hello', 30]
-        result.val == Channel.STOP
 
         cleanup:
         sql?.close()
@@ -237,7 +160,7 @@ class SqlDslTest extends Dsl2Spec {
         System.getenv('NF_SQLDB_ATHENA_TEST_S3_BUCKET')
     })
     @Timeout(60)
-    def 'should perform a query for AWS Athena and create a channel'() {
+    def 'should query AWS Athena in a script'() {
         given:
         def userName = System.getenv('NF_SQLDB_TEST_ATHENA_USERNAME')
         def password = System.getenv('NF_SQLDB_TEST_ATHENA_PASSWORD')
@@ -248,10 +171,10 @@ class SqlDslTest extends Dsl2Spec {
 
         when:
         def SCRIPT = """
-            include { fromQuery } from 'plugin/nf-sqldb'
+            include { sqlQuery } from 'plugin/nf-sqldb'
             workflow {
-                def sql = \"\"\"SELECT * FROM \"sra-glue-db\".metadata WHERE organism = 'Mycobacterium tuberculosis' AND bioproject = 'PRJNA670836' LIMIT 1;\"\"\"
-                channel.fromQuery(sql, db: "awsathena").view()
+                def sql = \"\"\"SELECT * FROM \"sra-glue-db\".metadata WHERE organism = 'Mycobacterium tuberculosis' AND bioproject = 'PRJNA670836' LIMIT 1\"\"\"
+                channel.fromList(sqlQuery(query: sql, db: "awsathena")).view()
             }
             """
         then:

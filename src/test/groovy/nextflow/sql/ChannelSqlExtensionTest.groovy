@@ -17,11 +17,7 @@
 
 package nextflow.sql
 
-import groovy.sql.Sql
-import groovyx.gpars.dataflow.DataflowQueue
-import nextflow.Channel
 import nextflow.Session
-import nextflow.extension.CH
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -31,86 +27,6 @@ import spock.lang.Timeout
  */
 @Timeout(10)
 class ChannelSqlExtensionTest extends Specification {
-
-    def 'should create channel from query' () {
-        given:
-        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
-        and:
-        sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
-        sql.execute("insert into FOO (id, alpha, omega) values (1, 'hola', 10) ")
-        sql.execute("insert into FOO (id, alpha, omega) values (2, 'ciao', 20) ")
-        sql.execute("insert into FOO (id, alpha, omega) values (3, 'hello', 30) ")
-        and:
-        def igniters = []
-        def session = Mock(Session) {
-            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
-            addIgniter(_) >> { Closure action -> igniters << action }
-        }
-        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
-        // subscribe to the channel before running the query
-        def query = { String statement ->
-            def channel = CH.getReadChannel(sqlExtension.fromQuery(statement, db: 'test'))
-            igniters.each { it.call() }
-            igniters.clear()
-            return channel
-        }
-
-        when:
-        def result = query('select * from FOO')
-        then:
-        result.val == [1, 'hola', 10]
-        result.val == [2, 'ciao', 20]
-        result.val == [3, 'hello', 30]
-        result.val == Channel.STOP
-
-        when:
-        result = query('select alpha, omega from FOO where id=3')
-        then:
-        result.val == ['hello', 30]
-        result.val == Channel.STOP
-
-        cleanup:
-        sql?.close()
-    }
-
-
-    def 'should insert data into table' () {
-        given:
-        def JDBC_URL = "jdbc:h2:mem:${UUID.randomUUID()}"
-        def sql = Sql.newInstance(JDBC_URL, 'sa', null)
-        and:
-        sql.execute('create table FOO(id int primary key, alpha varchar(255), omega int);')
-        and:
-        def session = Mock(Session) {
-            getConfig() >> [sql: [db: [test: [url: JDBC_URL]]]]
-        }
-        def sqlExtension = new ChannelSqlExtension(); sqlExtension.init(session)
-        and:
-        def ch = new DataflowQueue()
-
-        when:
-        // subscribe to the output before emitting the source items
-        def ret = CH.getReadChannel(sqlExtension.sqlInsert(ch, [db: 'test', into:'FOO', columns: 'id, alpha']))
-        ch.bind( [1, 'x1'] )
-        ch.bind( [2, 'y2'] )
-        ch.bind( [3, 'z3'] )
-        ch.bind( Channel.STOP )
-        then:
-        ret.val == [1, 'x1']
-        ret.val == [2, 'y2']
-        ret.val == [3, 'z3']
-        ret.val == Channel.STOP
-        and:
-        def rows = sql.rows("select id, alpha from FOO")
-        and:
-        rows.size() == 3
-        rows.id == [1,2,3]
-        rows.alpha == ['x1','y2','z3']
-
-        cleanup:
-        sql?.close()
-    }
 
     def 'should error on unresolved secrets' () {
         given:
@@ -134,7 +50,7 @@ class ChannelSqlExtensionTest extends Specification {
         sqlExtension.init(session)
 
         when:
-        sqlExtension.fromQuery([db: 'invalid'], 'select * from table')
+        sqlExtension.sqlQuery(db: 'invalid', query: 'select * from table')
 
         then:
         def e = thrown(IllegalArgumentException)
