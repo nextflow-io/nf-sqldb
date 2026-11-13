@@ -49,19 +49,6 @@ channel.fromList(sqlQuery(db: 'foo', query: 'SELECT alpha, delta FROM sample WHE
     .view { row -> "${row.alpha} ${row.delta}" }
 ```
 
-The `fromQuery` channel factory is deprecated in favor of `sqlQuery` (see [Migrating from fromQuery](docs/reference.md#migrating-from-fromquery)).
-
-Use `sqlInsert` to insert each item of a channel into a table (deprecated, see [Migrating from sqlInsert](docs/reference.md#migrating-from-sqlinsert)):
-
-```nextflow
-include { sqlInsert } from 'plugin/nf-sqldb'
-
-channel
-    .of('Hello','world!')
-    .map { it -> tuple(it, it.size()) }
-    .sqlInsert( into: 'SAMPLE', columns: 'NAME, LEN', db: 'foo' )
-```
-
 Use `sqlExecute` to run a statement that doesn't return a result set. It returns a map with `success` and either `result` or `error`:
 
 ```nextflow
@@ -74,10 +61,12 @@ sqlExecute(db: 'foo', statement: 'INSERT INTO sample_table (id, name) VALUES (:i
 // [success: true, result: 1]
 ```
 
+The `fromQuery` channel factory and the `sqlInsert` operator have been removed. Use `sqlQuery` in place of `fromQuery`, and `sqlExecute` with `params` or `batch` in place of `sqlInsert` (see [Migrating from fromQuery and sqlInsert](docs/reference.md#migrating-from-fromquery-and-sqlinsert)).
+
 ## Documentation
 
 - [Configuration](docs/configuration.md): database options and the `default` database
-- [Reference](docs/reference.md): all options for `sqlQuery`, `sqlExecute`, `fromQuery`, and `sqlInsert`
+- [Reference](docs/reference.md): all options for `sqlQuery` and `sqlExecute`, and how to migrate from `fromQuery` and `sqlInsert`
 - [Secrets](docs/secrets.md): using Nextflow secrets for database credentials
 - [AWS Athena](docs/aws-athena.md): querying AWS Athena
 - [Querying CSV files](docs/h2-csv.md): querying CSV files with H2

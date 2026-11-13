@@ -24,16 +24,16 @@ import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLFeatureNotSupportedException
+import java.nio.file.Files
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogRecord
 import java.util.logging.Logger
 
 import groovy.sql.Sql
-import nextflow.Channel
 import nextflow.Global
 import nextflow.Session
-import nextflow.extension.CH
 import nextflow.util.HashBag
 import spock.lang.Specification
 import spock.lang.Timeout
@@ -658,10 +658,8 @@ class SqlExecutionTest extends Specification {
     // the default database is shared by all tests in the JVM, so use unique table names and drop them
     def 'should keep data in the default database between calls'() {
         given:
-        def igniters = []
         def session = Mock(Session) {
             getConfig() >> [:]
-            addIgniter(_) >> { Closure action -> igniters << action }
         }
         def sqlExtension = new ChannelSqlExtension()
         sqlExtension.init(session)
@@ -669,15 +667,11 @@ class SqlExecutionTest extends Specification {
         when:
         def createResult = sqlExtension.sqlExecute([statement: 'CREATE TABLE test_default(id INT PRIMARY KEY, name VARCHAR(255))'])
         def insertResult = sqlExtension.sqlExecute([statement: 'INSERT INTO test_default VALUES (1, \'foo\'), (2, \'bar\')'])
-        // subscribe to the channel before running the query
-        def query = CH.getReadChannel(sqlExtension.fromQuery('SELECT id, name FROM test_default ORDER BY id'))
-        igniters.each { it.call() }
+        def rows = sqlExtension.sqlQuery([query: 'SELECT id, name FROM test_default ORDER BY id'])
         then:
         createResult == [success: true, result: null]
         insertResult == [success: true, result: 2]
-        query.val == [1, 'foo']
-        query.val == [2, 'bar']
-        query.val == Channel.STOP
+        rows == [[id: 1, name: 'foo'], [id: 2, name: 'bar']]
 
         cleanup:
         sqlExtension?.sqlExecute([statement: 'DROP TABLE IF EXISTS test_default'])
@@ -743,5 +737,46 @@ class SqlExecutionTest extends Specification {
         then:
         sqlExtension.sqlExecute([statement: 'INSERT INTO test_shutdown VALUES (1)']).error.contains("not found")
         sqlExtension.sqlExecute([db: 'closed', statement: 'INSERT INTO test_shutdown VALUES (1)']).error.contains("not found")
+    }
+
+    def 'should execute batch with named params on sqlite'() {
+        given:
+        def dir = Files.createTempDirectory('sqlexecute')
+        def ext = extension("jdbc:sqlite:${dir.resolve('test.db')}")
+        ext.sqlExecute(db: 'test', statement: 'CREATE TABLE foo(id INT PRIMARY KEY, alpha VARCHAR(255), omega INT)')
+
+        when:
+        def result = ext.sqlExecute(db: 'test', statement: 'INSERT INTO foo (id, alpha) VALUES (:id, :alpha)', batch: [[alpha: 'a', id: 1], [alpha: 'b', id: 2]])
+        then:
+        result == [success: true, result: 2]
+        ext.sqlQuery(db: 'test', query: 'SELECT id, alpha, omega FROM foo ORDER BY id') == [[id: 1, alpha: 'a', omega: null], [id: 2, alpha: 'b', omega: null]]
+
+        cleanup:
+        dir.deleteDir()
+    }
+
+    def 'should execute batches concurrently on sqlite'() {
+        given:
+        def dir = Files.createTempDirectory('sqlexecute')
+        def ext = extension("jdbc:sqlite:${dir.resolve('test.db')}")
+        ext.sqlExecute(db: 'test', statement: 'CREATE TABLE foo(id INT PRIMARY KEY, alpha VARCHAR(255))')
+        def results = new ConcurrentLinkedQueue<Map>()
+
+        when:
+        def threads = (0..<4).collect { int t ->
+            Thread.start {
+                for( int i=0; i<10; i++ ) {
+                    def batch = (0..<10).collect { int j -> [t*1000 + i*10 + j, 'x'] }
+                    results << ext.sqlExecute(db: 'test', statement: 'INSERT INTO foo (id, alpha) VALUES (?, ?)', batch: batch)
+                }
+            }
+        }
+        threads*.join()
+        then:
+        results.toList().findAll { !it.success } == []
+        ext.sqlQuery(db: 'test', query: 'SELECT COUNT(*) AS cnt FROM foo') == [[cnt: 400]]
+
+        cleanup:
+        dir.deleteDir()
     }
 }

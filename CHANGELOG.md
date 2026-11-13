@@ -4,6 +4,13 @@ All notable changes to the nf-sqldb plugin will be documented here.
 
 See [Keep a Changelog](https://keepachangelog.com/) for recommendations on how to structure this file.
 
+## Unreleased
+
+### Breaking changes
+
+- Remove the deprecated `fromQuery` channel factory and `sqlInsert` operator. Use `sqlQuery` and `sqlExecute` instead (see [Migrating from fromQuery and sqlInsert](docs/reference.md#migrating-from-fromquery-and-sqlinsert)) (#64)
+- Remove the `InsertHandler`, `QueryHandler`, and `QueryOp` classes, which implemented `sqlInsert` and `fromQuery` (#64)
+
 ## [0.8.0] - 2026-11-06
 
 ### Breaking changes

@@ -30,17 +30,8 @@ import groovy.sql.BatchingPreparedStatementWrapper
 import groovy.transform.CompileStatic
 import groovy.transform.PackageScope
 import groovy.util.logging.Slf4j
-import groovyx.gpars.dataflow.DataflowReadChannel
-import groovyx.gpars.dataflow.DataflowWriteChannel
-import groovyx.gpars.dataflow.expression.DataflowExpression
-import nextflow.Channel
-import nextflow.Global
 import nextflow.Session
-import nextflow.extension.CH
-import nextflow.extension.DataflowHelper
-import nextflow.plugin.extension.Factory
 import nextflow.plugin.extension.Function
-import nextflow.plugin.extension.Operator
 import nextflow.plugin.extension.PluginExtensionPoint
 import nextflow.script.dsl.Description
 import nextflow.script.types.Record
@@ -55,7 +46,7 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import groovy.sql.Sql
 /**
- * Provide a channel factory extension that allows the execution of Sql queries
+ * Provide functions to query and update SQL databases
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -70,23 +61,6 @@ class ChannelSqlExtension extends PluginExtensionPoint {
     static {
         GROOVY_SQL_LOGGER.setLevel(Level.SEVERE)
     }
-
-    private static final Map QUERY_PARAMS = [
-            db: CharSequence,
-            emitColumns: Boolean,
-            batchSize: Integer,
-            batchDelay: Integer
-    ]
-
-    private static final Map INSERT_PARAMS = [
-            db: CharSequence,
-            into: CharSequence,
-            columns: [CharSequence, List],
-            statement: CharSequence,
-            batch: Integer, // deprecated
-            batchSize: Integer,
-            setup: CharSequence
-    ]
 
     private Session session
     private SqlConfig config
@@ -118,41 +92,6 @@ class ChannelSqlExtension extends PluginExtensionPoint {
         }
     }
 
-    @Description('''
-        The `fromQuery` factory queries a SQL database and creates a channel that emits a tuple for each row in the result set.
-    ''')
-    @Factory
-    DataflowWriteChannel fromQuery(String query) {
-        fromQuery(Collections.emptyMap(), query)
-    }
-
-    @Description('''
-        The `fromQuery` factory queries a SQL database and creates a channel that emits a tuple for each row in the result set.
-
-        Options:
-        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
-        - `batchSize`: query the data in batches of the given size (requires `LIMIT` and `OFFSET` support, and the query must not already contain `LIMIT` or `OFFSET`)
-        - `batchDelay`: the delay in milliseconds between batches when using `batchSize` (default: `100`)
-        - `emitColumns`: when `true`, emit the column names as the first tuple
-    ''')
-    @Factory
-    DataflowWriteChannel fromQuery(Map opts, String query) {
-        CheckHelper.checkParams('fromQuery', opts, QUERY_PARAMS)
-        return queryToChannel(query, opts)
-    }
-
-    protected DataflowWriteChannel queryToChannel(String query, Map opts) {
-        final channel = CH.create()
-        final dataSource = dataSourceFromOpts(opts)
-        final handler = new QueryHandler()
-                .withDataSource(dataSource)
-                .withStatement(query)
-                .withTarget(channel)
-                .withOpts(opts)
-        session.addIgniter {-> handler.perform(true) }
-        return channel
-    }
-
     private static String dbNameFromOpts(Map opts) {
         return (opts?.db ?: 'default') as String
     }
@@ -168,39 +107,6 @@ class ChannelSqlExtension extends PluginExtensionPoint {
             throw new IllegalArgumentException(msg)
         }
         return dataSource
-    }
-
-    @Description('''
-        The `sqlInsert` operator inserts each value from a source channel into a SQL database table, and forwards the values unchanged.
-
-        Options:
-        - `db`: the database name, as defined under `sql.db` in the Nextflow configuration (default: `default`)
-        - `into`: the target table
-        - `columns`: the target column names, as a list or a comma-separated string, matching the tuple values emitted by the channel (default: inferred from the table columns for tuples, or from the keys for maps)
-        - `statement`: the SQL `INSERT` statement to execute, using `?` as a placeholder for each value (overrides `into` and `columns`)
-        - `batchSize`: insert the data in batches of the given size (default: `10`)
-        - `setup`: a SQL statement to execute before inserting the data, e.g. to create the target table
-    ''')
-    @Operator
-    DataflowWriteChannel sqlInsert( DataflowReadChannel source, Map opts=null ) {
-        CheckHelper.checkParams('sqlInsert', opts, INSERT_PARAMS)
-        final dataSource = dataSourceFromOpts(opts)
-        final target = CH.createBy(source)
-        final singleton = target instanceof DataflowExpression
-        final insert = new InsertHandler(dataSource, opts)
-
-        final next = { it ->
-            insert.perform(it)
-            target.bind(it)
-        }
-
-        final done = {
-            insert.close()
-            if( !singleton ) target.bind(Channel.STOP)
-        }
-
-        DataflowHelper.subscribeImpl(source, [onNext: next, onComplete: done])
-        return target
     }
 
     private static final Map EXECUTE_PARAMS = [

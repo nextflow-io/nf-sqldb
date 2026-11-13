@@ -17,11 +17,12 @@ EOF
 Then query it in a Nextflow script:
 
 ```nextflow
-include { fromQuery } from 'plugin/nf-sqldb'
+include { sqlQuery } from 'plugin/nf-sqldb'
 
-channel
-    .fromQuery("SELECT * FROM CSVREAD('test.csv') where foo>=2;")
-    .view()
+workflow {
+    channel.fromList(sqlQuery(query: "SELECT * FROM CSVREAD('test.csv') WHERE foo >= 2"))
+        .view()
+}
 ```
 
 The `CSVREAD` function provided by the H2 database engine allows you to query any CSV file in your filesystem. As shown in the example, you can use standard SQL clauses like `SELECT` and `WHERE` to define your query.

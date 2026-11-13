@@ -1,8 +1,8 @@
 # Reference
 
-This plugin provides the `sqlQuery` function for querying data, and the `sqlExecute` function for executing SQL statements that don't return data, such as DDL (Data Definition Language) and DML (Data Manipulation Language) operations. It also provides the `fromQuery` channel factory and the `sqlInsert` operator, which are deprecated because plugin channel factories and operators are not supported with static typing.
+This plugin provides the `sqlQuery` function for querying data, and the `sqlExecute` function for executing SQL statements that don't return data, such as DDL (Data Definition Language) and DML (Data Manipulation Language) operations.
 
-_NOTE:_ `fromQuery` and `sqlInsert` are deprecated. Use `sqlQuery` and `sqlExecute` instead (see [Migrating from fromQuery](#migrating-from-fromquery) and [Migrating from sqlInsert](#migrating-from-sqlinsert)).
+_NOTE:_ The `fromQuery` channel factory and the `sqlInsert` operator were deprecated in version 0.8.0 and have been removed. Use `sqlQuery` and `sqlExecute` instead (see [Migrating from fromQuery and sqlInsert](#migrating-from-fromquery-and-sqlinsert)).
 
 ## sqlQuery
 
@@ -91,139 +91,6 @@ Unlike `sqlExecute`, `sqlQuery` throws an error on failure, which stops the run:
 
 - Invalid options (e.g. a missing `query`) or an unknown database throw an `IllegalArgumentException`
 - A database error (e.g. invalid SQL or a connection failure) throws an `IllegalStateException`, with a message including the database name and the database error
-
-## fromQuery
-
-_DEPRECATED:_ plugin channel factories are not supported with static typing. Use `sqlQuery` instead (see [Migrating from fromQuery](#migrating-from-fromquery)).
-
-The `fromQuery` factory method queries a SQL database and creates a channel that emits a tuple for each row in the corresponding result set. For example:
-
-```nextflow
-include { fromQuery } from 'plugin/nf-sqldb'
-
-channel.fromQuery('select alpha, delta, omega from SAMPLE', db: 'foo').view()
-```
-
-The following options are available:
-
-`db`
-: The database handle. It must be defined under `sql.db` in the Nextflow configuration. If not specified, the `default` database is used (see [Configuration](configuration.md#default-database)).
-
-`batchSize`
-: Query the data in batches of the given size. This option is recommended for queries that may return a large result set, so that the entire result set is not loaded into memory at once.
-: _NOTE:_ this feature requires that the underlying SQL database supports `LIMIT` and `OFFSET`. Queries that already contain a `LIMIT` or `OFFSET` clause are rejected when this option is specified.
-
-`batchDelay`
-: The delay in milliseconds between consecutive batches when `batchSize` is specified (default: `100`).
-
-`emitColumns`
-: When `true`, the column names in the `SELECT` statement are emitted as the first tuple in the resulting channel.
-
-### Migrating from fromQuery
-
-Use `sqlQuery` with `channel.fromList` in place of `fromQuery`:
-
-```nextflow
-// before
-channel.fromQuery('SELECT alpha, delta FROM sample', db: 'foo')
-
-// after
-channel.fromList(sqlQuery(db: 'foo', query: 'SELECT alpha, delta FROM sample'))
-```
-
-Note the following differences:
-
-- `sqlQuery` emits a record for each row instead of a tuple, so use the column names instead of indices, e.g. `row.alpha` instead of `row[0]`. Use `.map { row -> tuple(row.alpha, row.delta) }` to get the same tuples as `fromQuery`. See [Return value](#return-value) for the case of the keys.
-- `sqlQuery` reads the whole result set into memory before returning, while `fromQuery` with `batchSize` reads it in batches. There is no equivalent of `batchSize` and `batchDelay`.
-- There is no equivalent of `emitColumns`, as each record carries the column names.
-- `sqlQuery` runs when it is called, while `fromQuery` runs when the workflow starts.
-- `sqlQuery` throws an error on failure.
-
-## sqlInsert
-
-_DEPRECATED:_ plugin operators are not supported with static typing. Use `sqlExecute` with the `params` or `batch` option instead (see [Migrating from sqlInsert](#migrating-from-sqlinsert)).
-
-The `sqlInsert` operator inserts each item from a source channel into a SQL database table, and emits the item unchanged. For example:
-
-```nextflow
-include { sqlInsert } from 'plugin/nf-sqldb'
-
-channel
-    .of('Hello','world!')
-    .map { it -> tuple(it, it.size()) }
-    .sqlInsert( into: 'SAMPLE', columns: 'NAME, LEN', db: 'foo' )
-```
-
-The above example executes the following SQL statements into the database `foo` (as defined in the Nextflow configuration).
-
-```sql
-INSERT INTO SAMPLE (NAME, LEN) VALUES ('Hello', 5);
-INSERT INTO SAMPLE (NAME, LEN) VALUES ('world!', 6);
-```
-
-_NOTE:_ the target table (e.g. `SAMPLE` in the above example) must be created beforehand.
-
-Each channel item can be a tuple (list), a map, or a single value (treated as a one-element tuple). For map items, each value is inserted into the column matching its key. For example:
-
-```nextflow
-channel
-    .of( [name: 'Hello', len: 5], [name: 'world!', len: 6] )
-    .sqlInsert( into: 'SAMPLE', db: 'foo' )
-```
-
-The following options are available:
-
-`db`
-: The database handle. It must be defined under `sql.db` in the Nextflow configuration. If not specified, the `default` database is used (see [Configuration](configuration.md#default-database)).
-
-`into`
-: The target table for inserting the data, in the form `[[catalog.]schema.]table`, e.g. `myschema.mytable`. On MySQL, a single prefix is the database, e.g. `mydb.mytable`. Quoted identifiers and names containing dots are not supported. When the columns are inferred, each part of the name is matched as written or in the database's default identifier case (but not with a different case for each part).
-
-`columns`
-: The database table column names to be filled with the channel data. The column names order and cardinality must match the tuple values emitted by the channel. The columns can be specified as a list or as a string of comma-separated values.
-: When not specified, the columns are inferred from the first item: for tuples, all columns of the target table are used, in table order (from the table metadata); for maps, the table columns matching the map keys are used. Map keys are matched to column names ignoring case.
-
-`statement`
-: The SQL `INSERT` statement to execute, using `?` as a placeholder for the actual values, for example: `insert into SAMPLE(X,Y) values (?,?)`. The `into` and `columns` options are ignored when this option is provided.
-
-`batchSize`
-: Insert the data in batches of the given size (default: `10`).
-
-`setup`
-: A SQL statement that is executed before inserting the data, e.g. to create the target table.
-: _NOTE:_ the underlying database should support the _create table if not exist_ idiom, as the plugin will execute this statement every time the script is run.
-
-_NOTE:_ Like all dataflow operators in Nextflow, the operators provided by this plugin are executed asynchronously. In particular, data inserted using the `sqlInsert` operator is _not_ guaranteed to be available to any subsequent queries using the `fromQuery` operator, as it is not possible to make a channel factory operation dependent on some upstream operation.
-
-### Migrating from sqlInsert
-
-Use `sqlExecute` with bind parameters in place of `sqlInsert`. Unlike `sqlInsert`, `sqlExecute` doesn't throw on failure: it logs the error and returns `[success: false, error: ...]`, so check the result as shown below if a failure should stop the run. To insert each item as it is emitted, call `sqlExecute` with `params` in `subscribe`:
-
-```nextflow
-include { sqlExecute } from 'plugin/nf-sqldb'
-
-ch.subscribe { r ->
-    def res = sqlExecute(db: 'foo', statement: 'INSERT INTO SAMPLE (NAME, LEN) VALUES (?, ?)', params: [r.name, r.len])
-    if( !res.success )
-        error(res.error)
-}
-```
-
-This opens a connection and commits a transaction for each item, which can be slow for many items.
-
-To insert all items at once, collect them and call `sqlExecute` with `batch`:
-
-```nextflow
-ch.collect().subscribe { rows ->
-    def res = sqlExecute(db: 'foo', statement: 'INSERT INTO SAMPLE (NAME, LEN) VALUES (?, ?)', batch: rows.collect { r -> [r.name, r.len] })
-    if( !res.success )
-        error(res.error)
-}
-```
-
-This inserts the rows in a single transaction (if the database driver supports transactions), so either all of them or none are inserted, but it waits for the channel to complete and holds all of the rows in memory.
-
-Unlike `sqlInsert`, `sqlExecute` doesn't infer the columns or create the statement from a table name, and doesn't throw an error on failure. Check the `success` key of the result to detect failures. Use `sqlExecute` without parameters in place of the `setup` option.
 
 ## sqlExecute
 
@@ -314,3 +181,67 @@ The following options are available:
 
 `batch`
 : A list of bind parameters, each a list or a map as for `params` (all of the same kind). The statement is executed once for each item as a JDBC batch, in a single transaction if the database driver supports transactions: if any item fails, the transaction is rolled back and none of the changes are applied. Otherwise (e.g. Databricks), the batch is executed without a transaction and is not atomic: items executed before a failure remain applied. The result is the total number of affected rows, not counting items for which the database driver doesn't report a count. Can't be used together with `params`.
+
+## Migrating from fromQuery and sqlInsert
+
+The `fromQuery` channel factory and the `sqlInsert` operator were deprecated in version 0.8.0 and have been removed, because plugin channel factories and operators are not supported with static typing.
+
+| Removed | Replacement |
+|---|---|
+| `channel.fromQuery(query, db: 'foo')` | `channel.fromList(sqlQuery(db: 'foo', query: query))` |
+| `ch.sqlInsert(into: 'SAMPLE', columns: 'NAME, LEN', db: 'foo')` | `sqlExecute(db: 'foo', statement: 'INSERT INTO SAMPLE (NAME, LEN) VALUES (?, ?)', params: ...)` or `batch: ...` |
+
+### fromQuery
+
+Use `sqlQuery` with `channel.fromList` in place of `fromQuery`:
+
+```nextflow
+// before
+channel.fromQuery('SELECT alpha, delta FROM sample', db: 'foo')
+
+// after
+channel.fromList(sqlQuery(db: 'foo', query: 'SELECT alpha, delta FROM sample'))
+```
+
+Note the following differences:
+
+- `sqlQuery` returns a record for each row instead of a tuple, so use the column names instead of indices, e.g. `row.alpha` instead of `row[0]`. Use `.map { row -> tuple(row.alpha, row.delta) }` to get the same tuples as `fromQuery`. See [Return value](#return-value) for the case of the keys.
+- `sqlQuery` reads the whole result set into memory before returning. There is no equivalent of the `batchSize` and `batchDelay` options.
+- There is no equivalent of the `emitColumns` option, as each record carries the column names.
+- `sqlQuery` runs when it is called, while `fromQuery` ran when the workflow started.
+- `sqlQuery` throws an error on failure.
+
+### sqlInsert
+
+Use `sqlExecute` with bind parameters in place of `sqlInsert`. Unlike `sqlInsert`, `sqlExecute` doesn't throw on failure: it logs the error and returns `[success: false, error: ...]`, so check the result as shown below if a failure should stop the run. To insert each item as it is emitted, call `sqlExecute` with `params` in `subscribe`:
+
+```nextflow
+include { sqlExecute } from 'plugin/nf-sqldb'
+
+ch.subscribe { r ->
+    def res = sqlExecute(db: 'foo', statement: 'INSERT INTO SAMPLE (NAME, LEN) VALUES (?, ?)', params: [r.name, r.len])
+    if( !res.success )
+        error(res.error)
+}
+```
+
+This opens a connection and commits a transaction for each item, which can be slow for many items.
+
+To insert all items at once, collect them and call `sqlExecute` with `batch`:
+
+```nextflow
+ch.collect().subscribe { rows ->
+    def res = sqlExecute(db: 'foo', statement: 'INSERT INTO SAMPLE (NAME, LEN) VALUES (?, ?)', batch: rows.collect { r -> [r.name, r.len] })
+    if( !res.success )
+        error(res.error)
+}
+```
+
+This inserts the rows in a single transaction (if the database driver supports transactions), so either all of them or none are inserted, but it waits for the channel to complete and holds all of the rows in memory.
+
+Note the following differences:
+
+- `sqlExecute` doesn't infer the columns or create the statement from a table name, so write the `INSERT` statement in place of the `into` and `columns` options. The `statement` option has the same meaning.
+- `sqlInsert` forwarded each item unchanged, while `sqlExecute` returns a result map.
+- There is no equivalent of the `batchSize` option, as `batch` inserts all of the rows in a single transaction.
+- Call `sqlExecute` without parameters in place of the `setup` option.
